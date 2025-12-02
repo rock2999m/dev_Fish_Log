@@ -634,6 +634,7 @@
       console.log('[CONFIG] loaded successfully');
       console.log('[CONFIG] FISHING_TRIP_API_WORKER:', CONFIG.API.FISHING_TRIP_API_WORKER);
       console.log('[CONFIG] WORKERS_AUTH_TOKEN:', CONFIG.API.WORKERS_AUTH_TOKEN ? '***' : 'empty');
+      console.log('[CONFIG] WORKERS_AUTH_TOKEN actual length:', CONFIG.API.WORKERS_AUTH_TOKEN.length);
     };
 
     // IndexedDB の初期化と設定読み込み
@@ -1152,6 +1153,9 @@
         
         // ★修正：Worker 経由で GAS にアクセス（secrets 保護）
         const workerUrl = CONFIG.API.FISHING_TRIP_API_WORKER + '/api/getSheetData';
+        console.log('[loadSheetViaGAS] Sending request to:', workerUrl);
+        console.log('[loadSheetViaGAS] Auth Token:', CONFIG.API.WORKERS_AUTH_TOKEN ? `(${CONFIG.API.WORKERS_AUTH_TOKEN.length} chars)` : 'empty');
+        
         const res = await fetch(workerUrl, {
           method: 'POST',
           headers: {
@@ -2131,7 +2135,7 @@
     }
 
     // ★修正：秘密情報の一括保存ボタンハンドラ
-    function saveSecretsHandler() {
+    async function saveSecretsHandler() {
       const authToken = (document.getElementById('workersAuthTokenEl')?.value || '').trim();
       const status = document.getElementById('secretsStatus');
       
@@ -2140,7 +2144,7 @@
         return;
       }
       
-      saveAuthToken();
+      await saveAuthToken();
     }
 
     if (document.getElementById('btnSaveSecrets')) {
