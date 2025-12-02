@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
@@ -17,14 +17,18 @@
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-50">
   <header class="sticky top-0 z-10 backdrop-blur bg-slate-950/70 border-b border-slate-800">
-    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-      <h1 class="text-lg font-semibold">釣りログ</h1>
-      <nav class="flex gap-2 text-sm">
-        <button id="navHome" class="px-3 py-1.5 rounded-xl border border-slate-700 hover:bg-slate-800">ホーム</button>
-        <button id="navRecord" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold">釣行の記録</button>
-        <button id="navTrips" class="px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-600 font-semibold">釣行の確認</button>
-        <button id="navCatches" class="px-3 py-1.5 rounded-xl bg-sky-700 hover:bg-sky-600 font-semibold">釣果の確認</button>
-        <button id="navSettings" class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold">設定</button>
+    <div class="max-w-4xl mx-auto px-4 py-3">
+      <div class="mb-3 text-center">
+        <h1 class="text-3xl font-bold">Fishing_Log</h1>
+      </div>
+      <nav class="flex gap-2 text-sm items-center justify-between">
+        <div class="flex gap-2">
+          <button id="navHome" class="px-3 py-1.5 rounded-xl border border-slate-700 hover:bg-slate-800">ホーム</button>
+          <button id="navRecord" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold">釣行の記録</button>
+          <button id="navTrips" class="px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-600 font-semibold">釣行の確認</button>
+          <button id="navCatches" class="px-3 py-1.5 rounded-xl bg-sky-700 hover:bg-sky-600 font-semibold">釣果の確認</button>
+        </div>
+        <button id="navSettings" class="px-3 py-1.5 rounded-xl hover:bg-slate-700 text-xl">⚙️</button>
       </nav>
     </div>
   </header>
@@ -148,32 +152,30 @@
   <main class="max-w-4xl mx-auto px-4 pb-28 pt-4">
     <!-- ホーム -->
     <section id="homeView" class="space-y-4">
-      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
-        <div class="text-xl font-bold">釣りログ ホーム</div>
-      </div>
       <!-- 釣行記録（1列、最上段） -->
       <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col gap-3">
         <div class="text-lg font-semibold">釣行の記録</div>
-        <button id="homeGoRecord" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold">釣行記録</button>
+        <button id="homeGoRecord" class="w-full py-8 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold">釣行記録</button>
       </div>
-      <!-- 確認Menu と 登録Menu を2列で表示（幅狭い場合でも2列を維持） -->
-      <div class="grid grid-cols-2 gap-4">
-        <!-- 確認Menu -->
-        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col gap-3">
-          <div class="text-lg font-semibold text-slate-50">確認</div>
-          <button id="homeGoTrips" class="py-2 rounded-xl bg-amber-700 hover:bg-amber-600 font-semibold text-sm sm:text-base">釣行の確認</button>
-          <button id="homeGoCatches" class="py-2 rounded-xl bg-sky-700 hover:bg-sky-600 font-semibold text-sm sm:text-base">釣果の確認</button>
+      <!-- 確認Menu と 登録Menu を縦並びで表示 -->
+      <div class="pt-4"></div>
+      <div class="space-y-4">
+        <!-- 確認 -->
+        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+          <div class="text-lg font-semibold text-slate-50 mb-3">確認</div>
+          <div class="flex flex-row gap-2">
+            <button id="homeGoTrips" class="flex-1 py-2 rounded-xl bg-amber-700 hover:bg-amber-600 font-semibold text-sm sm:text-base">釣行の確認</button>
+            <button id="homeGoCatches" class="flex-1 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 font-semibold text-sm sm:text-base">釣果の確認</button>
+          </div>
         </div>
-        <!-- 登録Menu -->
-        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col gap-3">
-          <div class="text-lg font-semibold text-slate-50">登録</div>
-          <button id="btnManualTripHome" class="py-2 rounded-xl bg-amber-700 hover:bg-amber-600 font-semibold text-sm sm:text-base">手動で釣行を登録</button>
-          <button id="homeAddManualCatch" class="py-2 rounded-xl bg-sky-700 hover:bg-sky-600 font-semibold text-sm sm:text-base">手動で釣果を追加</button>
+        <!-- 登録 -->
+        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+          <div class="text-lg font-semibold text-slate-50 mb-3">登録</div>
+          <div class="flex flex-row gap-2">
+            <button id="btnManualTripHome" class="flex-1 py-2 rounded-xl bg-amber-700 hover:bg-amber-600 font-semibold text-sm sm:text-base">手動で釣行を登録</button>
+            <button id="homeAddManualCatch" class="flex-1 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 font-semibold text-sm sm:text-base">手動で釣果を追加</button>
+          </div>
         </div>
-      </div>
-      <!-- 設定ボタン -->
-      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
-        <button id="homeGoSettings" class="w-full py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold text-sm">⚙️ 設定</button>
       </div>
     </section>
 
@@ -483,26 +485,133 @@
              window.location.hostname === '::1';
     };
 
-    // ★追加：ローカルホストのみ devConfig を初期化
-    const initializeDevConfig = () => {
-      Object.entries(devConfig).forEach(([key, value]) => {
-        localStorage.setItem(key, value);
-      });
+    // ★追加：ローカルホストのみ devConfig を初期化（ハイブリッドストレージ経由）
+    const initializeDevConfig = async () => {
+      if (!isLocalhost()) return;
+      for (const [key, value] of Object.entries(devConfig)) {
+        const existing = await configStorage.getItem(key);
+        if (!existing) {
+          await configStorage.setItem(key, value);
+        }
+      }
+      console.log('[DevConfig] defaults ensured for localhost');
     };
 
-    initializeDevConfig();
+    // ===== ハイブリッドストレージ（localStorage + IndexedDB） =====
+    class ConfigStorage {
+      constructor() {
+        this.db = null;
+        this.isIndexedDBAvailable = 'indexedDB' in window;
+      }
 
+      async init() {
+        if (!this.isIndexedDBAvailable) return;
+        return new Promise((resolve) => {
+          const req = indexedDB.open('FishLogConfig', 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('config')) {
+              db.createObjectStore('config', { keyPath: 'key' });
+              console.log('[ConfigStorage] IndexedDB initialized');
+            }
+          };
+          req.onsuccess = () => {
+            this.db = req.result;
+            console.log('[ConfigStorage] IndexedDB ready');
+            resolve();
+          };
+          req.onerror = () => {
+            console.warn('[ConfigStorage] IndexedDB init failed');
+            resolve();
+          };
+        });
+      }
+
+      async getItem(key) {
+        try {
+          const value = localStorage.getItem(key);
+          if (value !== null) {
+            console.log('[ConfigStorage] loaded from localStorage:', key);
+            return value;
+          }
+        } catch (e) {
+          console.warn('[ConfigStorage] localStorage unavailable:', e.message);
+        }
+
+        // IndexedDB にフォールバック
+        if (this.db) {
+          return new Promise((resolve) => {
+            const tx = this.db.transaction('config', 'readonly');
+            const req = tx.objectStore('config').get(key);
+            req.onsuccess = () => {
+              const value = req.result?.value;
+              if (value) {
+                console.log('[ConfigStorage] loaded from IndexedDB:', key);
+              }
+              resolve(value || null);
+            };
+            req.onerror = () => resolve(null);
+          });
+        }
+
+        return null;
+      }
+
+      async setItem(key, value) {
+        try {
+          localStorage.setItem(key, value);
+          console.log('[ConfigStorage] saved to localStorage:', key);
+        } catch (e) {
+          console.warn('[ConfigStorage] localStorage unavailable:', e.message);
+        }
+
+        // IndexedDB にも保存
+        if (this.db) {
+          return new Promise((resolve) => {
+            const tx = this.db.transaction('config', 'readwrite');
+            const req = tx.objectStore('config').put({ key, value });
+            req.onsuccess = () => {
+              console.log('[ConfigStorage] saved to IndexedDB:', key);
+              resolve();
+            };
+            req.onerror = () => {
+              console.warn('[ConfigStorage] IndexedDB save failed:', key);
+              resolve();
+            };
+          });
+        }
+      }
+
+      async removeItem(key) {
+        try {
+          localStorage.removeItem(key);
+          console.log('[ConfigStorage] removed from localStorage:', key);
+        } catch (e) {
+          console.warn('[ConfigStorage] localStorage unavailable');
+        }
+
+        if (this.db) {
+          return new Promise((resolve) => {
+            const tx = this.db.transaction('config', 'readwrite');
+            tx.objectStore('config').delete(key);
+            resolve();
+          });
+        }
+      }
+    }
+
+    const configStorage = new ConfigStorage();
+    
     // ===== Configuration (環境変数から読み込み、デフォルト値を使用) =====
-    const CONFIG = {
+    let CONFIG = {
       API: {
-        FISHING_TRIP_API_WORKER: localStorage.getItem('FISHING_TRIP_API_WORKER') || 'https://fishing-trip-api.yuji-fallline2999m.workers.dev',
-        WORKERS_AUTH_TOKEN: localStorage.getItem('WORKERS_AUTH_TOKEN') || "",
-        WORKER_PROXY_URL: localStorage.getItem('WORKER_PROXY_URL') || "",
-        TIDE_PROXY_URL: localStorage.getItem('TIDE_PROXY_URL') || "",
-        WATER_WORKER_URL: localStorage.getItem('WATER_WORKER_URL') || "",
-        CLOUDINARY_CLOUD_NAME: localStorage.getItem('CLOUDINARY_CLOUD_NAME') || "drcaeidmm",
-        CLOUDINARY_UPLOAD_PRESET: localStorage.getItem('CLOUDINARY_UPLOAD_PRESET') || "unsigned"
-        // ★削除：RAPIDAPI_KEY（Worker の環境変数で管理）
+        FISHING_TRIP_API_WORKER: 'https://fishing-trip-api.yuji-fallline2999m.workers.dev',
+        WORKERS_AUTH_TOKEN: "",
+        WORKER_PROXY_URL: "",
+        TIDE_PROXY_URL: "",
+        WATER_WORKER_URL: "",
+        CLOUDINARY_CLOUD_NAME: "drcaeidmm",
+        CLOUDINARY_UPLOAD_PRESET: "unsigned"
       },
       TIMEOUT: {
         WEATHER: 10000,
@@ -512,7 +621,27 @@
       }
     };
 
+    // 非同期で設定値を読み込み
+    const loadConfigFromStorage = async () => {
+      CONFIG.API.FISHING_TRIP_API_WORKER = await configStorage.getItem('FISHING_TRIP_API_WORKER') || 'https://fishing-trip-api.yuji-fallline2999m.workers.dev';
+      CONFIG.API.WORKERS_AUTH_TOKEN = await configStorage.getItem('WORKERS_AUTH_TOKEN') || "";
+      CONFIG.API.WORKER_PROXY_URL = await configStorage.getItem('WORKER_PROXY_URL') || "";
+      CONFIG.API.TIDE_PROXY_URL = await configStorage.getItem('TIDE_PROXY_URL') || "";
+      CONFIG.API.WATER_WORKER_URL = await configStorage.getItem('WATER_WORKER_URL') || "";
+      CONFIG.API.CLOUDINARY_CLOUD_NAME = await configStorage.getItem('CLOUDINARY_CLOUD_NAME') || "drcaeidmm";
+      CONFIG.API.CLOUDINARY_UPLOAD_PRESET = await configStorage.getItem('CLOUDINARY_UPLOAD_PRESET') || "unsigned";
+      
+      console.log('[CONFIG] loaded successfully');
+      console.log('[CONFIG] FISHING_TRIP_API_WORKER:', CONFIG.API.FISHING_TRIP_API_WORKER);
+      console.log('[CONFIG] WORKERS_AUTH_TOKEN:', CONFIG.API.WORKERS_AUTH_TOKEN ? '***' : 'empty');
+    };
 
+    // IndexedDB の初期化と設定読み込み
+    (async () => {
+      await configStorage.init();
+      await initializeDevConfig();
+      await loadConfigFromStorage();
+    })();
 
     // ===== Logger =====
     const DEBUG_WATER = true; // 必要に応じて true/false で出力を切替
@@ -538,7 +667,6 @@
     document.getElementById('homeGoRecord').onclick = () => { showView('record'); };
     document.getElementById('homeGoTrips').onclick = () => { showView('trips'); autoLoadTrips(); };   // ★追加
     document.getElementById('homeGoCatches').onclick = () => { showView('catches'); autoLoadCatches(); };
-    document.getElementById('homeGoSettings').onclick = () => { showView('settings'); };              // ★追加
     navHome.onclick = () => showView('home');
     navRecord.onclick = () => showView('record');
     navTrips.onclick = () => { showView('trips'); autoLoadTrips(); };                                  // ★追加
@@ -603,7 +731,22 @@
     // ===== OWM（開始/終了時の天気）- Cloudflare Worker プロキシ経由 =====
     const WORKER_PROXY_URL = CONFIG.API.WORKER_PROXY_URL;
     
-
+    // ★テスト：Worker プロキシが起動したらすぐテストする
+    (async () => {
+      console.log("[INIT] Testing Worker proxy connectivity...");
+      try {
+        const testRes = await fetch(WORKER_PROXY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: 34.62, lng: 135.05, isHistorical: false })
+        });
+        console.log("[INIT] Worker proxy response status:", testRes.status);
+        const testData = await testRes.json();
+        console.log("[INIT] Worker proxy response data:", testData);
+      } catch(e) {
+        console.error("[INIT] Worker proxy test failed:", e);
+      }
+    })();
     
     // ★追加：JST タイムスタンプを Unix タイムスタンプ（秒）に変換
     function getJSTTimestampForOWM(date = null){
@@ -643,9 +786,24 @@
         dt: isHistorical ? jstTimestamp : undefined
       };
       
-
+      // ★デバッグログ：プロキシへのリクエスト
+      console.log("[fetchWeather] Sending to Cloudflare Worker:", {
+        workerUrl: WORKER_PROXY_URL,
+        requestBody: requestBody,
+        targetDate: targetDate ? (typeof targetDate.toISOString === 'function' ? targetDate.toISOString() : String(targetDate)) : "(current)",
+        isHistorical: isHistorical,
+        jstTimestamp: jstTimestamp,
+        nowTimestamp: nowTimestamp
+      });
       
-
+      LOG.wx("[fetchWeather] Request to Worker:", {
+        lat: lat,
+        lng: lng,
+        isHistorical: isHistorical,
+        dt: isHistorical ? jstTimestamp : "(current)",
+        jst_datetime: targetDate ? (typeof targetDate.toISOString === 'function' ? targetDate.toISOString() : String(targetDate)) : new Date().toISOString(),
+        workerUrl: WORKER_PROXY_URL
+      });
       
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort("timeout"), timeoutMs);
@@ -665,11 +823,13 @@
         }
         
         const j = await res.json();
+        console.log("[fetchWeather] Worker response received:", j);
         
         // ★ログ：レスポンス値
         const data = isHistorical ? (j.data?.[0] || {}) : (j.current || {});
         const rain1h = data.rain?.["1h"];
         const snow1h = data.snow?.["1h"];
+        console.log("[fetchWeather] Extracted data:", { data, rain1h, snow1h });
         LOG.wx("[fetchWeather] Response:", {
           timestamp_utc: new Date(data.dt * 1000).toISOString(),
           timezone: j.timezone,
@@ -924,11 +1084,15 @@
     const LS_MAP_KEY_PREFIX = 'fishlog_mapping_v1';
     const mappingKey = () => `${LS_MAP_KEY_PREFIX}:${SHEET_ID}:${SHEET_NAME}`;
 
-    function readSavedMapping(){
-      try { return JSON.parse(localStorage.getItem(mappingKey())) || null; }
-      catch { return null; }
+    async function readSavedMapping(){
+      try { 
+        const data = await configStorage.getItem(mappingKey());
+        return data ? JSON.parse(data) : null;
+      } catch { 
+        return null; 
+      }
     }
-    function writeSavedMapping(){
+    async function writeSavedMapping(){
       const obj = {
         photo: mapPhoto.value, date: mapDate.value, time: mapTime.value,
         species: mapSpecies.value, size: mapSize.value, place: mapPlace.value,
@@ -936,11 +1100,15 @@
         tideLevel: mapTideLevel.value, tideTrend: mapTideTrend.value,
         highTide: mapHighTide.value, lowTide: mapLowTide.value, notes: mapNotes.value
       };
-      localStorage.setItem(mappingKey(), JSON.stringify(obj));
-      if (mappingStatus){ mappingStatus.textContent = '保存しました'; setTimeout(()=> mappingStatus.textContent='', 1500); }
+      try {
+        await configStorage.setItem(mappingKey(), JSON.stringify(obj));
+        if (mappingStatus){ mappingStatus.textContent = '保存しました'; setTimeout(()=> mappingStatus.textContent='', 1500); }
+      } catch (err) {
+        console.warn('[Mapping] Save failed:', err);
+      }
     }
-    function applySavedMapping(){
-      const s = readSavedMapping();
+    async function applySavedMapping(){
+      const s = await readSavedMapping();
       if (!s) return false;
       const set = (el, v) => { if (v != null) el.value = String(v); };
       set(mapPhoto, s.photo); set(mapDate, s.date); set(mapTime, s.time);
@@ -949,10 +1117,14 @@
       set(mapTideTrend, s.tideTrend); set(mapHighTide, s.highTide); set(mapLowTide, s.lowTide); set(mapNotes, s.notes);
       return true;
     }
-    btnSaveMapping  && (btnSaveMapping.onclick  = () => { writeSavedMapping(); });
-    btnResetMapping && (btnResetMapping.onclick = () => {
-      localStorage.removeItem(mappingKey());
-      if (mappingStatus){ mappingStatus.textContent = '保存をクリアしました'; setTimeout(()=> mappingStatus.textContent='', 1500); }
+    btnSaveMapping  && (btnSaveMapping.onclick  = async () => { await writeSavedMapping(); });
+    btnResetMapping && (btnResetMapping.onclick = async () => {
+      try {
+        await configStorage.removeItem(mappingKey());
+        if (mappingStatus){ mappingStatus.textContent = '保存をクリアしました'; setTimeout(()=> mappingStatus.textContent='', 1500); }
+      } catch (err) {
+        console.warn('[Mapping] Clear failed:', err);
+      }
     });
     
     // ★追加：キャッシュ変数の初期化
@@ -1209,8 +1381,10 @@
       const iHH = idx('tide_high_times'); if (iHH) mapHighTide.value  = iHH;
       const iLL = idx('tide_low_times');  if (iLL) mapLowTide.value   = iLL;
 
-      // ③ 保存済み（最優先）— 無条件で上書き適用
-      applySavedMapping();
+      // ③ 保存済み（最優先）— 無条件で上書き適用（非同期）
+      (async () => {
+        await applySavedMapping();
+      })();
 
       // 折りたたみを表示状態で出す（ユーザーが保存できるように）— mappingPanel が存在する場合のみ
       if (mappingPanel) {
@@ -1799,8 +1973,16 @@
 };
     const saveDraft = async (d) => {
       d.updatedAt = new Date().toISOString();
-      localStorage.setItem(LS_KEY, JSON.stringify(d));
-      await saveDraftToIndexedDB(d).catch(err => console.warn('[Draft] IndexedDB save failed:', err));
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(d));
+      } catch (e) {
+        console.warn('[Draft] localStorage save failed (PWA mode?):', e.message);
+      }
+      try {
+        await saveDraftToIndexedDB(d);
+      } catch (err) {
+        console.warn('[Draft] IndexedDB save failed:', err);
+      }
     };
     const fmtLocal = iso => { try{return new Date(iso).toLocaleString();}catch{return '—'}; };
 
@@ -1921,8 +2103,8 @@
     // ボタンのオンクリック設定
     if (btnSaveSheetConfig) btnSaveSheetConfig.onclick = saveSheetConfigToGAS;
 
-    // ★追加：秘密情報（トークン・キー）の保存関数
-    function saveAuthToken() {
+    // ★修正：秘密情報（トークン・キー）の保存関数（ハイブリッドストレージ経由）
+    async function saveAuthToken() {
       const token = (document.getElementById('workersAuthTokenEl')?.value || '').trim();
       const status = document.getElementById('secretsStatus');
       
@@ -1931,17 +2113,24 @@
         return;
       }
       
-      localStorage.setItem('WORKERS_AUTH_TOKEN', token);
-      if (status) {
-        status.textContent = '✓ 保存しました';
-        setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+      try {
+        await configStorage.setItem('WORKERS_AUTH_TOKEN', token);
+        CONFIG.API.WORKERS_AUTH_TOKEN = token;
+        
+        if (status) {
+          status.textContent = '✓ 保存しました';
+          setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+        }
+        
+        document.getElementById('workersAuthTokenEl').value = '';
+        console.log('[Settings] Worker Auth Token saved via hybrid storage');
+      } catch (err) {
+        console.error('[Settings] Failed to save auth token:', err);
+        if (status) status.textContent = 'エラーが発生しました';
       }
-      
-      document.getElementById('workersAuthTokenEl').value = '';
-      console.log('[Settings] Worker Auth Token saved to localStorage');
     }
 
-    // ★追加：秘密情報の一括保存ボタンハンドラ
+    // ★修正：秘密情報の一括保存ボタンハンドラ
     function saveSecretsHandler() {
       const authToken = (document.getElementById('workersAuthTokenEl')?.value || '').trim();
       const status = document.getElementById('secretsStatus');
@@ -4847,7 +5036,10 @@
           const q = JSON.parse(localStorage.getItem(key) || '[]');
           q.push({ t: Date.now(), payload });
           localStorage.setItem(key, JSON.stringify(q));
-        }catch{}
+          console.log('[Upload] Queued locally (localStorage fallback)');
+        }catch(e){
+          console.warn('[Upload] Local queue failed:', e.message);
+        }
       };
       const clearDraftAndUI = ()=>{
         // ★修正：共通関数でオーバーレイを消す
@@ -5576,14 +5768,19 @@
     // ★追記: アップロード再送（オンライン/起動時）
     async function retryUploadQueue(){
       const key='fishlog_upload_queue_v1';
-      let q=[]; try{ q = JSON.parse(localStorage.getItem(key) || '[]'); }catch{ q=[]; }
+      let q=[]; 
+      try { 
+        q = JSON.parse(localStorage.getItem(key) || '[]'); 
+      } catch { 
+        q=[]; 
+      }
       if (!Array.isArray(q) || !q.length) return;
       
       // ★追加：多重実行防止
       if (isUploading) return;
       
       // ★修正：共通関数でローディングオーバーレイを表示（アップロード中テキスト）
-      showUploadingOverlay('アップロード中...');
+      showUploadingOverlay('保留中のアップロードを再送中...');
 
       const remain=[];
       for (const item of q){
@@ -5595,11 +5792,17 @@
           });
           if (!res.ok){ remain.push(item); continue; }
           await res.text(); // 消費
-        }catch{
+          console.log('[UploadQueue] Item sent successfully');
+        }catch(e){
+          console.warn('[UploadQueue] Send failed:', e.message);
           remain.push(item);
         }
       }
-      localStorage.setItem(key, JSON.stringify(remain));
+      try {
+        localStorage.setItem(key, JSON.stringify(remain));
+      } catch (e) {
+        console.warn('[UploadQueue] Failed to update queue:', e.message);
+      }
       // ★修正：完了時に共通関数でオーバーレイを消す
       hideUploadingOverlay();
       if (q.length && !remain.length) { try{ alert('保留中のアップロードを再送し、すべて完了しました。'); }catch{} }
@@ -6952,4 +7155,3 @@
   </script>
 </body>
 </html>
-
