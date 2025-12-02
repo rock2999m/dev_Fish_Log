@@ -528,33 +528,61 @@
       }
 
       async getItem(key) {
-        try {
-          const value = localStorage.getItem(key);
-          if (value !== null) {
-            console.log('[ConfigStorage] loaded from localStorage:', key);
-            return value;
-          }
-        } catch (e) {
-          console.warn('[ConfigStorage] localStorage unavailable:', e.message);
-        }
-
-        // IndexedDB にフォールバック
+        // IndexedDB から値を取得（より新しい可能性がある）
         if (this.db) {
           return new Promise((resolve) => {
             const tx = this.db.transaction('config', 'readonly');
             const req = tx.objectStore('config').get(key);
             req.onsuccess = () => {
-              const value = req.result?.value;
-              if (value) {
+              const idbValue = req.result?.value;
+              if (idbValue) {
                 console.log('[ConfigStorage] loaded from IndexedDB:', key);
+                resolve(idbValue);
+                return;
               }
-              resolve(value || null);
+              
+              // IndexedDB になければ localStorage から取得
+              try {
+                const lsValue = localStorage.getItem(key);
+                if (lsValue !== null) {
+                  console.log('[ConfigStorage] loaded from localStorage (fallback):', key);
+                  // localStorage から取得した値を IndexedDB に同期
+                  const syncTx = this.db.transaction('config', 'readwrite');
+                  syncTx.objectStore('config').put({ key, value: lsValue });
+                }
+                resolve(lsValue);
+              } catch (e) {
+                console.warn('[ConfigStorage] localStorage unavailable:', e.message);
+                resolve(null);
+              }
             };
-            req.onerror = () => resolve(null);
+            req.onerror = () => {
+              // IndexedDB エラー時は localStorage にフォールバック
+              try {
+                const lsValue = localStorage.getItem(key);
+                if (lsValue !== null) {
+                  console.log('[ConfigStorage] loaded from localStorage (IndexedDB error):', key);
+                }
+                resolve(lsValue);
+              } catch (e) {
+                console.warn('[ConfigStorage] both storages unavailable:', e.message);
+                resolve(null);
+              }
+            };
           });
         }
 
-        return null;
+        // IndexedDB なしの場合は localStorage のみ
+        try {
+          const value = localStorage.getItem(key);
+          if (value !== null) {
+            console.log('[ConfigStorage] loaded from localStorage (no IndexedDB):', key);
+          }
+          return value;
+        } catch (e) {
+          console.warn('[ConfigStorage] localStorage unavailable:', e.message);
+          return null;
+        }
       }
 
       async setItem(key, value) {
@@ -631,6 +659,18 @@
       CONFIG.API.CLOUDINARY_CLOUD_NAME = await configStorage.getItem('CLOUDINARY_CLOUD_NAME') || "drcaeidmm";
       CONFIG.API.CLOUDINARY_UPLOAD_PRESET = await configStorage.getItem('CLOUDINARY_UPLOAD_PRESET') || "unsigned";
       
+      // デバッグ：localStorage と IndexedDB の値を比較
+      try {
+        const lsToken = localStorage.getItem('WORKERS_AUTH_TOKEN');
+        console.log('[CONFIG] localStorage WORKERS_AUTH_TOKEN length:', lsToken ? lsToken.length : 'empty');
+        console.log('[CONFIG] loaded WORKERS_AUTH_TOKEN length:', CONFIG.API.WORKERS_AUTH_TOKEN.length);
+        if (lsToken && CONFIG.API.WORKERS_AUTH_TOKEN && lsToken !== CONFIG.API.WORKERS_AUTH_TOKEN) {
+          console.warn('[CONFIG] WARNING: localStorage and loaded token mismatch!');
+        }
+      } catch (e) {
+        console.warn('[CONFIG] Could not compare tokens:', e.message);
+      }
+      
       console.log('[CONFIG] loaded successfully');
       console.log('[CONFIG] FISHING_TRIP_API_WORKER:', CONFIG.API.FISHING_TRIP_API_WORKER);
       console.log('[CONFIG] WORKERS_AUTH_TOKEN:', CONFIG.API.WORKERS_AUTH_TOKEN ? '***' : 'empty');
@@ -642,6 +682,9 @@
       await configStorage.init();
       await initializeDevConfig();
       await loadConfigFromStorage();
+      console.log('[Init] CONFIG loaded, now initializing SHEET_ID...');
+      await initializeSheetId();
+      console.log('[Init] All initialization complete');
     })();
 
     // ===== Logger =====
@@ -1218,12 +1261,16 @@
         }
         
         console.log('[Init] Fetching SHEET_ID from Worker:', workerUrl);
+        console.log('[Init] Token available:', CONFIG.API.WORKERS_AUTH_TOKEN ? `(${CONFIG.API.WORKERS_AUTH_TOKEN.length} chars)` : 'empty');
+        
         const res = await fetch(workerUrl + `?_=${Date.now()}`, {
           method: 'GET',
           headers: {
             'X-Auth-Token': CONFIG.API.WORKERS_AUTH_TOKEN
           }
         });
+        
+        console.log('[Init] Response status:', res.status);
         const json = await res.json();
         console.log('[Init] Response:', json);
         
@@ -2052,16 +2099,7 @@
 
     // 画像アップロード（CONFIG から毎回読み込み）
 
-    // ★修正：SHEET_ID を優先で取得してから他の処理を実行
-    (async () => {
-      try {
-        console.log('[Init] Starting SHEET_ID initialization...');
-        await initializeSheetId();
-        console.log('[Init] SHEET_ID initialization complete. SHEET_ID:', SHEET_ID);
-      } catch (err) {
-        console.error('[Init] SHEET_ID initialization failed:', err);
-      }
-    })();
+    // ★修正：SHEET_ID 初期化は loadConfigFromStorage() 完了後に実行される
 
     // ===== Settings UI 機能 =====
     // 初期化：GAS から読み込むため、初期値は空にしておく
@@ -2118,6 +2156,14 @@
       }
       
       try {
+        // 古い値をクリア
+        try {
+          localStorage.removeItem('WORKERS_AUTH_TOKEN');
+        } catch (e) {
+          console.warn('[Settings] Failed to clear old token:', e.message);
+        }
+        
+        // 新しい値を保存
         await configStorage.setItem('WORKERS_AUTH_TOKEN', token);
         CONFIG.API.WORKERS_AUTH_TOKEN = token;
         
