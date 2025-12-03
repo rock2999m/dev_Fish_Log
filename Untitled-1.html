@@ -485,9 +485,10 @@
              window.location.hostname === '::1';
     };
 
-    // ★追加：ローカルホストのみ devConfig を初期化（ハイブリッドストレージ経由）
+    // ★修正：devConfig を常に初期化（isLocalhost チェック削除）
+    // ユーザー設定対象の WORKERS_AUTH_TOKEN は上書きしない
     const initializeDevConfig = async () => {
-      console.log('[DevConfig] initializeDevConfig start, isLocalhost:', isLocalhost());
+      console.log('[DevConfig] initializeDevConfig start');
       console.log('[DevConfig] devConfig contents:', devConfig);
       for (const [key, value] of Object.entries(devConfig)) {
         const existing = await configStorage.getItem(key);
@@ -502,7 +503,7 @@
           console.log('[DevConfig]', key, 'already exists, skipping');
         }
       }
-      console.log('[DevConfig] defaults ensured for localhost');
+      console.log('[DevConfig] defaults ensured');
     };
 
     // ===== インメモリストレージ（localStorage/IndexedDB が使用不可な場合のフォールバック） =====
