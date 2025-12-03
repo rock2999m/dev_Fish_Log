@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
@@ -2286,24 +2286,35 @@
       }
       
       try {
+        console.log('[Settings] saveAuthToken: Starting, token length:', token.length);
+        
         // 古い値をクリア
         try {
           localStorage.removeItem('WORKERS_AUTH_TOKEN');
+          console.log('[Settings] Cleared old token from localStorage');
         } catch (e) {
           console.warn('[Settings] Failed to clear old token:', e.message);
         }
         
         // 新しい値を保存
+        console.log('[Settings] Calling configStorage.setItem...');
         await configStorage.setItem('WORKERS_AUTH_TOKEN', token);
+        
+        // ★修正：storage に保存したら、すぐに CONFIG に反映
         CONFIG.API.WORKERS_AUTH_TOKEN = token;
+        console.log('[Settings] Token saved to storage and CONFIG updated immediately');
+        
+        // ★追加：Token を再読み込みして確認
+        const verifyToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+        console.log('[Settings] Verification: Token reloaded from storage, length:', verifyToken ? verifyToken.length : 'null');
         
         if (status) {
-          status.textContent = '✓ 保存しました';
+          status.textContent = '✓ 保存しました（即座に有効です）';
           setTimeout(() => { if (status) status.textContent = ''; }, 2000);
         }
         
         document.getElementById('workersAuthTokenEl').value = '';
-        console.log('[Settings] Worker Auth Token saved via hybrid storage');
+        console.log('[Settings] Worker Auth Token is now active for all API calls');
       } catch (err) {
         console.error('[Settings] Failed to save auth token:', err);
         if (status) status.textContent = 'エラーが発生しました';
