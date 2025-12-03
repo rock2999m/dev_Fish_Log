@@ -921,6 +921,13 @@
       // ★修正：CONFIG初期化完了を待機（API呼び出し前の必須処理）
       await configInitPromise;
       
+      // ★追加：API呼び出し時に最新のトークンを動的に読み込む
+      const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+      if (latestToken) {
+        CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+        console.log('[fetchWeather] Token refreshed from storage:', latestToken.length, 'chars');
+      }
+      
       if (typeof lat !== 'number' || typeof lng !== 'number') throw new Error("座標が未設定です");
       
       const jstTimestamp = getJSTTimestampForOWM(targetDate);
@@ -1290,6 +1297,13 @@
     }
     async function loadSheetViaGAS(sheetName, sheetId = null) {
       try {
+        // ★追加：API呼び出し時に最新のトークンを動的に読み込む
+        const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+        if (latestToken) {
+          CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+          console.log('[loadSheetViaGAS] Token refreshed from storage:', latestToken.length, 'chars');
+        }
+        
         // sheetId が指定されていない場合は SHEET_ID を使用
         const id = (sheetId || SHEET_ID).trim();
         if (!id) throw new Error('Sheet ID が指定されていません');
@@ -2237,6 +2251,13 @@
     // Sheet ID 保存関数（統合）
     async function saveSheetConfigToGAS() {
       try {
+        // ★追加：API呼び出し時に最新のトークンを動的に読み込む
+        const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+        if (latestToken) {
+          CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+          console.log('[saveSheetConfigToGAS] Token refreshed from storage:', latestToken.length, 'chars');
+        }
+        
         const newId = (sheetIdEl?.value || '').trim();
         if (!newId) {
           if (sheetConfigStatus) sheetConfigStatus.textContent = 'ID を入力してください';
@@ -2424,6 +2445,13 @@
     }
        
     async function uploadPhotoToDrive(file){
+      // ★追加：API呼び出し時に最新のトークンを動的に読み込む
+      const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+      if (latestToken) {
+        CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+        console.log('[uploadPhotoToDrive] Token refreshed from storage:', latestToken.length, 'chars');
+      }
+      
       // ★進捗（存在すれば使用）
       const setProgress = (msg)=>{ try{ const el=document.getElementById('uploadProgress'); if(el){ el.textContent = msg; } }catch{} };
 
@@ -2476,6 +2504,13 @@
     // ★追加：潮汐チャート画像取得・アップロード関数（GASプロキシ経由）
     async function fetchAndUploadTideImages(startedAt, endedAt) {
         console.log('[TideImageUpload] Starting tide image fetch', { startedAt, endedAt });
+        
+        // ★追加：API呼び出し時に最新のトークンを動的に読み込む
+        const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+        if (latestToken) {
+          CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+          console.log('[fetchAndUploadTideImages] Token refreshed from storage:', latestToken.length, 'chars');
+        }
         
         if (!startedAt || !endedAt) {
           console.warn('[TideImageUpload] Missing startedAt or endedAt');
