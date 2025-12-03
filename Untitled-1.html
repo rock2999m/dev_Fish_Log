@@ -1,14 +1,14 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="description" content="釣行の記録、釣果の管理、潮汐情報の自動取得ができるPWAアプリケーション" />
-  <link rel="manifest" href="./manifest.json">
-  <link rel="apple-touch-icon" href="./icon-192.png">
-  <link rel="icon" type="image/png" href="./icon-192.png" sizes="192x192">
-  <link rel="icon" type="image/png" href="./icon-512.png" sizes="512x512">
+  <link rel="manifest" href="/dev_Fish_Log/manifest.json">
+  <link rel="apple-touch-icon" href="/dev_Fish_Log/icon-192.png">
+  <link rel="icon" type="image/png" href="/dev_Fish_Log/icon-192.png" sizes="192x192">
+  <link rel="icon" type="image/png" href="/dev_Fish_Log/icon-512.png" sizes="512x512">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="FishTrip">
@@ -717,9 +717,10 @@
 
     // 非同期で設定値を読み込み
     const loadConfigFromStorage = async () => {
-      console.log('[CONFIG] loadConfigFromStorage start');
+      console.log('[CONFIG] loadConfigFromStorage start - THIS SHOULD PRINT!');
       
       // ★デバッグ：各値を読み込んでログ出力
+      console.log('[CONFIG] About to call getItem(FISHING_TRIP_API_WORKER)');
       const val_FISHING_TRIP_API_WORKER = await configStorage.getItem('FISHING_TRIP_API_WORKER');
       console.log('[CONFIG] getItem FISHING_TRIP_API_WORKER:', val_FISHING_TRIP_API_WORKER);
       CONFIG.API.FISHING_TRIP_API_WORKER = val_FISHING_TRIP_API_WORKER || 'https://fishing-trip-api.yuji-fallline2999m.workers.dev';
@@ -787,13 +788,17 @@
       console.log('[Init] configInitPromise START');
       await configStorage.init();
       console.log('[Init] configStorage.init() complete');
+      
+      console.log('[Init] About to call initializeDevConfig()');
       await initializeDevConfig();
       console.log('[Init] initializeDevConfig() complete');
       
       // ★追加：initializeDevConfig() 完了後、IndexedDB トランザクション完了待機
+      console.log('[Init] About to wait 100ms for IndexedDB transactions...');
       await new Promise(resolve => setTimeout(resolve, 100));
-      console.log('[Init] Waiting for IndexedDB transactions complete');
+      console.log('[Init] Waiting complete, now calling loadConfigFromStorage()');
       
+      console.log('[Init] About to call loadConfigFromStorage()');
       await loadConfigFromStorage();
       console.log('[Init] loadConfigFromStorage() complete');
       CONFIG_INITIALIZED = true;
@@ -2003,7 +2008,9 @@
     // ===== PWA: Service Worker 登録 =====
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
+        navigator.serviceWorker.register('/dev_Fish_Log/sw.js', {
+          scope: '/dev_Fish_Log/'
+        })
           .then(registration => {
             console.log('[PWA] Service Worker registered:', registration);
           })
