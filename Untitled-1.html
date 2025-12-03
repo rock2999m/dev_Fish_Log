@@ -496,6 +496,8 @@
         if (!existing) {
           console.log('[DevConfig] Setting', key, 'to', value);
           await configStorage.setItem(key, value);
+          // ★追加：各セット後に待機（IndexedDB トランザクション完了待機）
+          await new Promise(resolve => setTimeout(resolve, 10));
           // ★デバッグ：設定後に確認
           const after = await configStorage.getItem(key);
           console.log('[DevConfig] After setting, verified:', key, '=', after);
@@ -503,6 +505,8 @@
           console.log('[DevConfig]', key, 'already exists, skipping');
         }
       }
+      // ★追加：最後に追加の待機（すべてのトランザクション完了確認）
+      await new Promise(resolve => setTimeout(resolve, 50));
       console.log('[DevConfig] defaults ensured');
     };
 
@@ -785,6 +789,11 @@
       console.log('[Init] configStorage.init() complete');
       await initializeDevConfig();
       console.log('[Init] initializeDevConfig() complete');
+      
+      // ★追加：initializeDevConfig() 完了後、IndexedDB トランザクション完了待機
+      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('[Init] Waiting for IndexedDB transactions complete');
+      
       await loadConfigFromStorage();
       console.log('[Init] loadConfigFromStorage() complete');
       CONFIG_INITIALIZED = true;
@@ -2143,13 +2152,11 @@
         console.warn('[Draft] localStorage save failed (PWA mode?):', e.message);
       }
       
-      // 【2】IndexedDB に保存
-      try {
-        await saveDraftToIndexedDB(d);
-        console.log('[Draft] Saved to IndexedDB');
-      } catch (err) {
-        console.warn('[Draft] IndexedDB save failed:', err);
-      }
+      // 【2】IndexedDB に保存（非クリティカル：非同期実行）
+      // ★修正：IndexedDB トランザクション競合を避けるため、非ブロッキング実行
+      saveDraftToIndexedDB(d).catch(err => 
+        console.warn('[Draft] IndexedDB save failed (async):', err)
+      );
     };
     const fmtLocal = iso => { try{return new Date(iso).toLocaleString();}catch{return '—'}; };
 
