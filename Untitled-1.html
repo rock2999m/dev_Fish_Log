@@ -2325,13 +2325,26 @@
         CONFIG.API.WORKERS_AUTH_TOKEN = token;
         console.log('[Settings] Token saved to storage and CONFIG updated immediately');
         
+        // ★追加：Token 保存後に SHEET_ID を再取得
+        console.log('[Settings] Token saved, now refreshing SHEET_ID...');
+        if (status) {
+          status.textContent = '✓ 保存しました（SHEET_IDを取得中...）';
+        }
+        
+        await initializeSheetId();
+        console.log('[Settings] SHEET_ID refreshed:', SHEET_ID);
+        
         // ★追加：Token を再読み込みして確認
         const verifyToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
         console.log('[Settings] Verification: Token reloaded from storage, length:', verifyToken ? verifyToken.length : 'null');
         
         if (status) {
-          status.textContent = '✓ 保存しました（即座に有効です）';
-          setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+          if (SHEET_ID) {
+            status.textContent = '✓ 保存しました（SHEET_ID取得完了）';
+          } else {
+            status.textContent = '✓ 保存しました（SHEET_ID取得に失敗）';
+          }
+          setTimeout(() => { if (status) status.textContent = ''; }, 3000);
         }
         
         document.getElementById('workersAuthTokenEl').value = '';
