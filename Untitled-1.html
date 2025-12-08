@@ -2665,12 +2665,20 @@
     async function loadHarborsFromSheet(){
       if (harborCache) return harborCache;
       
-      // ★追加：SHEET_ID が取得されるまで待機
+      // ★修正：SHEET_ID が取得されるまで待機（タイムアウト付き）
       if (!SHEET_ID) {
+        const timeout = 5000; // 5秒
+        const startTime = Date.now();
         await new Promise(resolve => {
           const check = () => {
-            if (SHEET_ID) resolve();
-            else setTimeout(check, 100);
+            if (SHEET_ID) {
+              resolve();
+            } else if (Date.now() - startTime > timeout) {
+              LOG.tide('[loadHarborsFromSheet] SHEET_ID timeout');
+              resolve(); // タイムアウト時も続行
+            } else {
+              setTimeout(check, 100);
+            }
           };
           setTimeout(check, 100);
         });
@@ -2713,6 +2721,20 @@
         Math.sin(dLat / 2) ** 2 +
         Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.asin(Math.sqrt(a));
+    }
+
+    // ★追加：Harbor キャッシュを確保（同期・キャッシュ待機保証）
+    async function ensureHarborCache() {
+      try {
+        await loadHarborsFromSheet();
+        if (!harborCache || !harborCache.mapped || harborCache.mapped.length === 0) {
+          throw new Error('Harbor cache is empty');
+        }
+        return harborCache;
+      } catch (e) {
+        LOG.tide('[ensureHarborCache] Error:', e?.message || e);
+        throw e;
+      }
     }
 
     async function findNearestHarbor(lat, lon, radiusKm = 10){
@@ -2872,6 +2894,19 @@
       const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
       return `${y}-${m}-${da}`;
     }
+
+    // ★追加：モーダル内の要素を有効/無効化する汎用関数（グローバルスコープ）
+    const setTripEditModalElementsEnabled = (enabled) => {
+      const tripEditModalContent = tripEditModal.querySelector('div.w-full');
+      if (tripEditModalContent) {
+        const buttons = tripEditModalContent.querySelectorAll('button, input, textarea');
+        buttons.forEach(btn => {
+          btn.disabled = !enabled;
+          btn.style.opacity = enabled ? '1' : '0.5';
+          btn.style.pointerEvents = enabled ? 'auto' : 'none';
+        });
+      }
+    };
 
     function tideInfoFromChart(chart, isoWithOffset){
       const localDate = new Date(isoWithOffset);
@@ -7275,18 +7310,8 @@
         console.log('[btnSaveTripEdit] calling showUploadingOverlay');
         showUploadingOverlay('保存中...');
         
-        // ★追加：モーダル内のすべてのボタンと入力を無効化
-        const tripEditModalContent = tripEditModal.querySelector('div.w-full');
-        console.log('[btnSaveTripEdit] tripEditModalContent:', !!tripEditModalContent);
-        if (tripEditModalContent) {
-          const buttons = tripEditModalContent.querySelectorAll('button, input, textarea');
-          console.log('[btnSaveTripEdit] disabling', buttons.length, 'elements');
-          buttons.forEach(btn => {
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-            btn.style.pointerEvents = 'none';
-          });
-        }
+        // ★修正：汎用関数を使用してボタンを無効化
+        setTripEditModalElementsEnabled(false);
         
         console.log('[btnSaveTripEdit] waiting for requestAnimationFrame');
         await new Promise(resolve => requestAnimationFrame(resolve));
@@ -7299,21 +7324,22 @@
         } catch (e) {
           console.error('[btnSaveTripEdit] error:', e);
           hideUploadingOverlay();
-          // ★追加：エラー時もボタンを再度有効化
-          if (tripEditModalContent) {
-            const buttons = tripEditModalContent.querySelectorAll('button, input, textarea');
-            buttons.forEach(btn => {
-              btn.disabled = false;
-              btn.style.opacity = '1';
-              btn.style.pointerEvents = 'auto';
-            });
-          }
+          // ★修正：汎用関数を使用してボタンを有効化
+          setTripEditModalElementsEnabled(true);
         }
       };
     }
 
     // ★追加：釣行編集データを上書き保存
     async function submitTripEditData() {
+      // ★追加：Harbor キャッシュを事前ロード（編集時の非同期遅延防止）
+      try {
+        await ensureHarborCache();
+      } catch (e) {
+        LOG.tide('[submitTripEditData] Warning: Harbor cache load failed:', e?.message);
+        // 警告のみ、処理は続行
+      }
+      
       // ★追加：保存時に Trips シートから全データを再度取得して draft に反映（未編集データの喪失を防ぐ）
       try {
         const headers = tripsCache[0];
@@ -7324,6 +7350,18 @@
         const tripRow = tripsCache.find((t, idx) => idx > 0 && String(t[col.tripId]) === String(draft.tripId));
         
         if (tripRow) {
+          // ★追加：日時データを復元（Trips シートから）
+          if (tripRow[col.startedAt]) {
+            draft.startedAt = tripRow[col.startedAt];
+          }
+          if (tripRow[col.endedAt]) {
+            draft.endedAt = tripRow[col.endedAt];
+          }
+          
+          // ★追加：位置情報を復元
+          if (tripRow[col.lat]) draft.lat = parseFloat(tripRow[col.lat]) || draft.lat;
+          if (tripRow[col.lng]) draft.lng = parseFloat(tripRow[col.lng]) || draft.lng;
+          
           // 元データから全カラムを draft に反映
           draft.status = tripRow[col.status] || draft.status || 'ended';
           
@@ -7389,7 +7427,7 @@
         console.error('[TripEdit] Error restoring full trip data:', e);
       }
       
-      // 入力値から釣行データを更新
+      // 入力値から釣行データを更新（入力があった場合のみ更新）
       if (editTripStarted.value) {
         try {
           const dt = new Date(editTripStarted.value.replace(' ', 'T'));
@@ -7399,6 +7437,7 @@
           return;
         }
       }
+      // ★修正：editTripStarted が空の場合、Trips シートから復元した値を保持（上書きしない）
 
       if (editTripEnded.value) {
         try {
@@ -7409,6 +7448,7 @@
           return;
         }
       }
+      // ★修正：editTripEnded が空の場合、Trips シートから復元した値を保持（上書きしない）
 
       let lat = parseFloat(editTripLat.value);
       let lng = parseFloat(editTripLng.value);
@@ -7416,6 +7456,7 @@
         draft.lat = lat;
         draft.lng = lng;
       }
+      // ★修正：lat/lng が有効でない場合、Trips シートから復元した値を保持
 
       // ★追加：メモを draft に反映
       const editTripMemo = document.getElementById('editTripMemo');
@@ -7450,9 +7491,13 @@
             draft.start_weather = null;
           }
           
-          // 潮汐を再取得（開始時刻がある場合）
+          // ★修正：潮汐を再取得（開始時刻がある場合）- Harbor キャッシュ確保後に実行
           if (draft.startedAt) {
             try {
+              // Harbor キャッシュが確保されたことを確認
+              if (harborCache && harborCache.mapped && harborCache.mapped.length > 0) {
+                LOG.tide('[submitTripEditData] Harbor cache confirmed before fetchTideForStart');
+              }
               const tide = await fetchTideForStart(lat, lng, draft.startedAt);
               draft.start_tide = tide || null;
               if (tide?.chart && tide?.chartDateKey) {
@@ -7462,7 +7507,9 @@
                   chart: tide.chart
                 };
               }
+              LOG.tide('[submitTripEditData] Tide refetched successfully');
             } catch (tideErr) {
+              LOG.tide('[submitTripEditData] Tide refetch error:', tideErr?.message || tideErr);
               draft.start_tide = null;
             }
           }
@@ -7493,10 +7540,16 @@
         
         // ★修正：モーダルを完全に閉じた後にオーバーレイを隠す
         hideUploadingOverlay();
+        
+        // ★修正：成功時もボタンを再有効化（汎用関数を使用）
+        setTripEditModalElementsEnabled(true);
       } catch (e) {
         // ★修正：エラー時もオーバーレイを隠す
         hideUploadingOverlay();
         alert('アップロードに失敗しました: ' + (e?.message || e));
+        
+        // ★修正：エラー時もボタンを再度有効化（汎用関数を使用）
+        setTripEditModalElementsEnabled(true);
       }
     }
 
