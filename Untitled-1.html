@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="description" content="釣行の記録、釣果の管理、潮汐情報の自動取得ができるPWAアプリケーション" />
   <link rel="manifest" href="/dev_Fish_Log/manifest.json">
@@ -11,15 +11,25 @@
   <link rel="icon" type="image/png" href="/dev_Fish_Log/icon-512.png" sizes="512x512">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="FishTrip">
-  <title>釣行記録（PWAフロント / コンパクトUI）</title>
+  <meta name="apple-mobile-web-app-title" content="FishTrip_dev">
+  <title>釣行記録_dev（PWAフロント / コンパクトUI）</title>
   <script src="https://cdn.tailwindcss.com"></script>
-</head>
+  <style>
+    /* ★追加：入力フォーム自動ズーム抑制 */
+    input, textarea, select {
+      font-size: 16px !important;
+    }
+    
+    /* ★追加：ピンチズーム完全無効化 */
+    body {
+      touch-action: manipulation;
+    }
+  </style>
 <body class="min-h-screen bg-slate-950 text-slate-50">
   <header class="sticky top-0 z-10 backdrop-blur bg-slate-950/70 border-b border-slate-800">
     <div class="max-w-4xl mx-auto px-4 py-3">
       <div class="mb-3 text-center">
-        <h1 class="text-3xl font-bold">Fishing_Log</h1>
+        <h1 class="text-3xl font-bold">Fishing_Log_dev</h1>
       </div>
       <nav class="flex gap-2 text-sm items-center justify-between">
         <div class="flex gap-2">
@@ -7613,6 +7623,35 @@
       if (btnAddManualCatch) {
         btnAddManualCatch.onclick = openManualCatchForm;
       }
+    })();
+
+    // ★追加：スマホズーム完全無効化
+    (function disableZoom(){
+      // ピンチズーム無効化
+      document.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      // ダブルタップズーム無効化
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, { passive: false });
+      
+      // キーボードズーム無効化（Ctrl++, Ctrl+-, Ctrl+0）
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === '+' || e.key === '-' || e.key === '0') {
+            e.preventDefault();
+          }
+        }
+      });
     })();
   </script>
 </body>
