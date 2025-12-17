@@ -57,11 +57,11 @@
           <h4 class="text-sm font-semibold text-slate-300 mb-3">釣行情報</h4>
           
           <label class="block mb-3"><span class="text-sm text-slate-300">開始日時</span>
-            <input id="editTripStarted" type="text" placeholder="yyyy-mm-dd hh:mm" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
+            <input id="editTripStarted" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
           </label>
           
           <label class="block mb-3"><span class="text-sm text-slate-300">終了日時</span>
-            <input id="editTripEnded" type="text" placeholder="yyyy-mm-dd hh:mm" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
+            <input id="editTripEnded" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
           </label>
           
           <label class="block mb-3"><span class="text-sm text-slate-300">釣場位置（緯度）</span>
@@ -118,7 +118,7 @@
           
           <div class="space-y-2 max-h-80 overflow-auto">
             <label class="block"><span class="text-xs text-slate-400">日時</span>
-              <input id="editFormCatchTime" type="text" placeholder="YYYY-MM-DDTHH:MM" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-sm" />
+              <input id="editFormCatchTime" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-sm" />
             </label>
             
             <label class="block"><span class="text-xs text-slate-400">魚種</span>
@@ -260,6 +260,20 @@
           </div>
         </div>
       </div>
+
+      <!-- ★追加：水温取得ロジックの選択 -->
+      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 mb-4">
+        <h3 class="text-base font-semibold mb-3">水温取得ロジック</h3>
+        <p class="text-xs text-slate-400 mb-3">水温データを取得する際の処理を選択します（既定は従来ロジック）。</p>
+        <label class="block text-sm">
+          <span class="text-xs text-slate-400">取得方法</span>
+          <select id="waterTempProviderSelect" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="worker">従来：気象庁ポイント（Cloudflare Worker 経由）</option>
+            <option value="mur">GAS：MUR SST（高解像度海面水温）</option>
+          </select>
+        </label>
+        <div id="waterTempProviderStatus" class="text-sm text-slate-300 mt-2"></div>
+      </div>
     </section>
 
     <!-- 釣行の確認（Trips / GViz） -->
@@ -371,7 +385,7 @@
           </div>
           <div class="space-y-3">
             <label class="block"><span class="text-sm text-slate-300">時刻</span>
-              <input id="inpCatchTime" type="text" placeholder="YYYY-MM-DDTHH:MM" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+              <input id="inpCatchTime" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
             </label>
             <label class="block"><span class="text-sm text-slate-300">魚種</span>
               <input id="inpSpecies" type="text" placeholder="例：アジ" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
@@ -408,7 +422,10 @@
           </div>
           <div class="space-y-3">
             <label class="block"><span class="text-sm text-slate-300">開始日時（空ならEXIFから補完）</span>
-              <input id="inpTripStart" type="text" placeholder="YYYY-MM-DDTHH:MM" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+              <input id="inpTripStart" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+            </label>
+            <label class="block"><span class="text-sm text-slate-300">終了日時（未入力の場合、終了時に再確認）</span>
+              <input id="inpTripEnd" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
             </label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label class="block">
@@ -674,6 +691,8 @@
     }
 
     const configStorage = new ConfigStorage();
+    const WATER_TEMP_PROVIDER_KEY = 'WATER_TEMP_PROVIDER';
+    const WATER_TEMP_PROVIDER_DEFAULT = 'worker';
     
     // ===== Configuration (環境変数から読み込み、デフォルト値を使用) =====
     let CONFIG = {
@@ -691,63 +710,60 @@
         TIDE: 8000,
         WATER: 8000,
         GAS: 15000
+      },
+      PREFERENCES: {
+        waterTempProvider: WATER_TEMP_PROVIDER_DEFAULT
       }
     };
 
     // ★Worker URL 取得＆保存ロジック
     async function fetchAndSaveWorkerUrls() {
       try {
-        // トークンを storage から取得
-        const token = await configStorage.getItem('WORKERS_AUTH_TOKEN');
-        
-        const headers = { 
-          'Content-Type': 'application/json'
-        };
-        
-        // トークンがあれば X-Auth-Token ヘッダーに追加
-        if (token) {
-          headers['X-Auth-Token'] = token;
+        const token = CONFIG.API.WORKERS_AUTH_TOKEN || (await configStorage.getItem('WORKERS_AUTH_TOKEN'));
+        if (!token) {
+          throw new Error('WORKERS_AUTH_TOKEN が設定されていません');
         }
-        
-        const response = await fetch(`${CONFIG.API.FISHING_TRIP_API_WORKER}/api/get-worker-urls`, {
+
+        const baseUrl = (CONFIG.API.FISHING_TRIP_API_WORKER || '').replace(/\/$/, '');
+        if (!baseUrl) {
+          throw new Error('FISHING_TRIP_API_WORKER が設定されていません');
+        }
+
+        const url = `${baseUrl}/api/get-worker-urls`;
+        const res = await fetch(url, {
           method: 'GET',
-          headers: headers
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Auth-Token': token
+          }
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        if (!res.ok) {
+          let body = '(no body)';
+          try { body = await res.text(); } catch {}
+          throw new Error(`Worker URL 取得失敗 (${res.status}): ${body}`);
         }
 
-        const data = await response.json();
+        const payload = await res.json();
+        await configStorage.setItem('WORKER_URLS', JSON.stringify(payload));
 
-        // storage に保存
-        await configStorage.setItem('WORKER_URLS', JSON.stringify(data));
-
-        // CONFIG に反映
-        CONFIG.API.WEATHER_WORKER_URL = data.WEATHER_WORKER_URL || '';
-        CONFIG.API.TIDE_WORKER_URL = data.TIDE_WORKER_URL || '';
-        CONFIG.API.EXIF_WORKER_URL = data.EXIF_WORKER_URL || '';
-
-      } catch (error) {
-        console.error('[fetchAndSaveWorkerUrls] Error:', error);
-      }
-    }
-
-    // ★storage から Worker URLs を読み込む
-    async function loadWorkerUrlsFromStorage() {
-      try {
-        const stored = await configStorage.getItem('WORKER_URLS');
-        
-        if (stored) {
-          const data = typeof stored === 'string' ? JSON.parse(stored) : stored;
-          CONFIG.API.WEATHER_WORKER_URL = data.WEATHER_WORKER_URL || '';
-          CONFIG.API.TIDE_WORKER_URL = data.TIDE_WORKER_URL || '';
-          CONFIG.API.EXIF_WORKER_URL = data.EXIF_WORKER_URL || '';
-        } else {
-          await fetchAndSaveWorkerUrls();
+        const updateConfigUrl = (key) => {
+          if (payload?.[key]) {
+            CONFIG.API[key] = payload[key];
+          }
+        };
+        updateConfigUrl('WEATHER_WORKER_URL');
+        updateConfigUrl('TIDE_WORKER_URL');
+        updateConfigUrl('EXIF_WORKER_URL');
+        updateConfigUrl('WATER_WORKER_URL');
+        if (payload?.WORKERS_AUTH_TOKEN) {
+          CONFIG.API.WORKERS_AUTH_TOKEN = payload.WORKERS_AUTH_TOKEN;
         }
-      } catch (error) {
-        console.error('[loadWorkerUrlsFromStorage] Error:', error);
+
+        return payload;
+      } catch (err) {
+        console.error('[Config] fetchAndSaveWorkerUrls failed:', err);
+        throw err;
       }
     }
 
@@ -759,15 +775,37 @@
       
       const val_WORKERS_AUTH_TOKEN = await configStorage.getItem('WORKERS_AUTH_TOKEN');
       CONFIG.API.WORKERS_AUTH_TOKEN = val_WORKERS_AUTH_TOKEN || "";
-      
-      // ★Worker URL を storage から読み込む（または新規取得）
-      await loadWorkerUrlsFromStorage();
+
+      // ★Worker URL を storage から読み込む
+      try {
+        const storedWorkerUrls = await configStorage.getItem('WORKER_URLS');
+        if (storedWorkerUrls) {
+          const parsed = typeof storedWorkerUrls === 'string' ? JSON.parse(storedWorkerUrls) : storedWorkerUrls;
+          const updateConfigUrl = (key) => {
+            if (parsed?.[key]) {
+              CONFIG.API[key] = parsed[key];
+            }
+          };
+          updateConfigUrl('WEATHER_WORKER_URL');
+          updateConfigUrl('TIDE_WORKER_URL');
+          updateConfigUrl('EXIF_WORKER_URL');
+          updateConfigUrl('WATER_WORKER_URL');
+          if (parsed?.WORKERS_AUTH_TOKEN) {
+            CONFIG.API.WORKERS_AUTH_TOKEN = parsed.WORKERS_AUTH_TOKEN;
+          }
+        }
+      } catch (err) {
+        console.warn('[CONFIG] failed to restore WORKER_URLS:', err);
+      }
       
       const val_CLOUDINARY_CLOUD_NAME = await configStorage.getItem('CLOUDINARY_CLOUD_NAME');
       CONFIG.API.CLOUDINARY_CLOUD_NAME = val_CLOUDINARY_CLOUD_NAME || "drcaeidmm";
       
       const val_CLOUDINARY_UPLOAD_PRESET = await configStorage.getItem('CLOUDINARY_UPLOAD_PRESET');
       CONFIG.API.CLOUDINARY_UPLOAD_PRESET = val_CLOUDINARY_UPLOAD_PRESET || "unsigned";
+
+      const storedWaterTempProvider = await configStorage.getItem(WATER_TEMP_PROVIDER_KEY);
+      CONFIG.PREFERENCES.waterTempProvider = storedWaterTempProvider || WATER_TEMP_PROVIDER_DEFAULT;
       
       // ★追加：デバッグログ：読み込んだ値を表示
       
@@ -865,8 +903,79 @@
     }
     function nowIsoLocal(){ return toOffsetIsoLocal(new Date()); }
     function toLocalInputValue(d){
+      if (!d || isNaN(d.getTime())) return '';
       const pad = n => String(n).padStart(2,'0');
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function formatDigitsForNumericDatetime(digits){
+      if (!digits) return '';
+      const y  = digits.slice(0, 4);
+      const mo = digits.slice(4, 6);
+      const d  = digits.slice(6, 8);
+      const hh = digits.slice(8, 10);
+      const mm = digits.slice(10, 12);
+
+      let formatted = y;
+      if (mo) formatted += '/' + mo;
+      if (d)  formatted += '/' + d;
+      if (hh) formatted += ' ' + hh;
+      if (mm) formatted += ':' + mm;
+      return formatted;
+    }
+
+    function applyNumericDatetimeMask(input){
+      if (!input) return;
+      const handler = () => {
+        const digits = input.value.replace(/\D/g, '').slice(0, 12);
+        if (!digits) {
+          if (input.value) input.value = '';
+          return;
+        }
+        const formatted = formatDigitsForNumericDatetime(digits);
+        if (formatted !== input.value) {
+          input.value = formatted;
+        }
+      };
+
+      if (input._numericDatetimeHandler) {
+        input.removeEventListener('input', input._numericDatetimeHandler);
+      }
+      input._numericDatetimeHandler = handler;
+      input.setAttribute('inputmode', 'numeric');
+      input.setAttribute('pattern', '[0-9/ :]*');
+      input.addEventListener('input', handler);
+      handler();
+    }
+
+    function parseDisplayDatetime(value){
+      if (!value) return null;
+      const digits = value.replace(/\D/g, '');
+      if (digits.length >= 12){
+        const year = parseInt(digits.slice(0, 4), 10);
+        const month = parseInt(digits.slice(4, 6), 10);
+        const day = parseInt(digits.slice(6, 8), 10);
+        const hour = parseInt(digits.slice(8, 10), 10);
+        const minute = parseInt(digits.slice(10, 12), 10);
+        if ([year, month, day, hour, minute].some(v => Number.isNaN(v))) return null;
+        if (month < 1 || month > 12) return null;
+        if (day < 1 || day > 31) return null;
+        if (hour < 0 || hour > 23) return null;
+        if (minute < 0 || minute > 59) return null;
+        const dt = new Date(year, month - 1, day, hour, minute, 0, 0);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+      const timeOnlyMatch = value.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+      if (timeOnlyMatch) {
+        const now = new Date();
+        const hour = parseInt(timeOnlyMatch[1], 10);
+        const minute = parseInt(timeOnlyMatch[2], 10);
+        const second = parseInt(timeOnlyMatch[3] || '0', 10);
+        if ([hour, minute, second].some(v => Number.isNaN(v))) return null;
+        const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, second);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+      return null;
     }
 
     // ===== 天気ユーティリティ =====
@@ -1219,6 +1328,7 @@
     
     // CONFIG初期化完了イベントをリッスン
     window.addEventListener('CONFIG_READY', () => {
+      initWaterTempProviderSetting();
     }); 
 
     // ★修正：シートID を GAS から動的に取得する
@@ -1230,6 +1340,8 @@
     const btnLoadSheet = document.getElementById('btnLoadSheet');
     const btnClearSheet = document.getElementById('btnClearSheet');
     const sheetStatus = document.getElementById('catchesStatus');
+    const waterTempProviderSelect = document.getElementById('waterTempProviderSelect');
+    const waterTempProviderStatus = document.getElementById('waterTempProviderStatus');
     const mappingPanel = document.getElementById('mappingPanel');
     const mapPhoto = document.getElementById('mapPhoto');
     const mapDate = document.getElementById('mapDate');
@@ -1654,6 +1766,19 @@
             }catch{}
           }
 
+          // ★追加: raw_json から start_tide データを抽出
+          if (iRaw>=0 && r[iRaw]) {
+            try {
+              const raw = JSON.parse(r[iRaw]);
+              if (raw?.start_tide) {
+                rec.start_tide = raw.start_tide;
+                console.log(`[loadTripsMoonMap] Loaded start_tide for tripId ${id}`, { has_chart: !!raw.start_tide.chart });
+              }
+            } catch (parseErr) {
+              console.warn(`[loadTripsMoonMap] Failed to parse raw_json for tripId ${id}:`, parseErr);
+            }
+          }
+
           map[String(id)] = rec;
         }
         return map;
@@ -1664,19 +1789,22 @@
     }
 
     function mapRowsToItems(rows){
-      // 固定列名 tripId を自動検出して紐付け（UIに追加しない）
+      // 固定列名 tripId と timestamp を自動検出して紐付け（UIに追加しない）
       const headers = rows[0].map(h=>String(h||'').trim());
       const tripIdx = headers.findIndex(h => h === 'tripId');
+      const timestampIdx = headers.findIndex(h => h === 'timestamp');
 
       const get=(r,sel)=>{ const idx=Number(sel.value); return Number.isFinite(idx)&&r[idx]!==undefined ? r[idx] : ''; };
       const out=[];
       for(let i=1;i<rows.length;i++){
         const r=rows[i];
         const tripId = (tripIdx>=0) ? (r[tripIdx] ?? '') : '';
+        const timestamp = (timestampIdx>=0) ? (r[timestampIdx] ?? '') : '';  // ★追加：timestamp を直接取得
         const tripMoon = tripsById && tripId ? (tripsById[String(tripId)] || null) : null;
 
         out.push({
         tripId,
+        timestamp,  // ★追加：timestamp プロパティを含める
         // 既存マッピング
         photo:get(r,mapPhoto), date:get(r,mapDate), time:get(r,mapTime), species:get(r,mapSpecies), size:get(r,mapSize),
         place:get(r,mapPlace), lat:get(r,mapLat), lng:get(r,mapLng), tideName:get(r,mapTideName), tideLevel:get(r,mapTideLevel),
@@ -1749,7 +1877,7 @@
       remoteCatchList.innerHTML = '';
       detailWrap.classList.add('hidden'); // 既存の独立詳細パネルは使わない
 
-      items.forEach((it)=>{
+      items.forEach((it, idx)=>{
         // ===== 外枠（折りたたみ） =====
         const wrap = document.createElement('details');
         wrap.className = 'rounded-2xl bg-slate-900 border border-slate-800 mb-2';
@@ -1758,14 +1886,6 @@
         const summary = document.createElement('summary');
         summary.className = 'list-none p-3 flex gap-3 items-start cursor-pointer rounded-2xl hover:bg-slate-800/60';
 
-        // サムネ
-        const img = document.createElement('img');
-        img.className = 'w-24 h-24 object-cover rounded-xl bg-slate-950';
-        img.alt = 'photo';
-        img.src = resolvePhotoUrl(it.photo) || '';
-        summary.appendChild(img);
-
-        // テキスト群
         const info = document.createElement('div');
         info.className = 'flex-1 min-w-0';
 
@@ -1872,6 +1992,12 @@
                   ${kv('地点', it.water_temp_point || '')}
                 </div>` : ''}
 
+              <!-- ★追加：潮汐グラフ（水温とメモの間） -->
+              <div id="catch-tide-chart-${idx}" class="rounded-xl bg-slate-800/30 p-2 hidden">
+                <div class="text-xs text-slate-400 mb-2">潮汐グラフ</div>
+                <canvas id="catch-tide-canvas-${idx}" class="w-full h-auto bg-slate-950 rounded-lg"></canvas>
+              </div>
+
               ${it.notes ? `
                 <div class="rounded-xl bg-slate-800/30 p-3">
                   <div class="text-xs text-slate-400 mb-1">メモ</div>
@@ -1891,8 +2017,16 @@
 
         // 開閉で hover を制御（開いている間は hover 無効）
         wrap.addEventListener('toggle', () => {
-          if (wrap.open) summary.classList.remove('hover:bg-slate-800/60');
-          else summary.classList.add('hover:bg-slate-800/60');
+          if (wrap.open) {
+            summary.classList.remove('hover:bg-slate-800/60');
+            
+            // ★追加：details が開いたら潮汐グラフを描画
+            setTimeout(() => {
+              renderCatchTideGraph(idx, it);
+            }, 100);
+          } else {
+            summary.classList.add('hover:bg-slate-800/60');
+          }
         });
 
         remoteCatchList.appendChild(wrap);
@@ -2353,6 +2487,50 @@
       document.getElementById('btnSaveSecrets').onclick = saveSecretsHandler;
     }
 
+    function getConfiguredWaterTempProvider() {
+      return (CONFIG?.PREFERENCES?.waterTempProvider) || WATER_TEMP_PROVIDER_DEFAULT;
+    }
+
+    function setWaterTempProviderStatus(message, isError = false) {
+      if (!waterTempProviderStatus) return;
+      waterTempProviderStatus.textContent = message || '';
+      waterTempProviderStatus.classList.toggle('text-red-400', !!message && isError);
+      if (message) {
+        clearTimeout(waterTempProviderStatus._timer);
+        waterTempProviderStatus._timer = setTimeout(() => {
+          waterTempProviderStatus.textContent = '';
+          waterTempProviderStatus.classList.remove('text-red-400');
+        }, 2200);
+      }
+    }
+
+    async function persistWaterTempProviderSelection(value) {
+      const normalized = value === 'mur' ? 'mur' : WATER_TEMP_PROVIDER_DEFAULT;
+      await configStorage.setItem(WATER_TEMP_PROVIDER_KEY, normalized);
+      CONFIG.PREFERENCES.waterTempProvider = normalized;
+      return normalized;
+    }
+
+    async function initWaterTempProviderSetting() {
+      if (!waterTempProviderSelect) return;
+      const current = getConfiguredWaterTempProvider();
+      waterTempProviderSelect.value = current;
+      waterTempProviderSelect.removeAttribute('disabled');
+    }
+
+    if (waterTempProviderSelect) {
+      waterTempProviderSelect.addEventListener('change', async (event) => {
+        try {
+          const normalized = await persistWaterTempProviderSelection(event.target.value);
+          waterTempProviderSelect.value = normalized;
+          setWaterTempProviderStatus('✓ 保存しました');
+        } catch (err) {
+          console.warn('[WaterTempSetting] Failed to save provider:', err);
+          setWaterTempProviderStatus('保存に失敗しました', true);
+        }
+      });
+    }
+
     function fileToDataURL(file){
       return new Promise((res, rej)=>{
         const r = new FileReader();
@@ -2508,12 +2686,6 @@
     async function fetchAndUploadTideImages(startedAt, endedAt) {
         console.log('[TideImageUpload] Starting tide image fetch', { startedAt, endedAt });
         
-        // ★追加：API呼び出し時に最新のトークンを動的に読み込む
-        const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
-        if (latestToken) {
-          CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
-        }
-        
         if (!startedAt || !endedAt) {
           console.warn('[TideImageUpload] Missing startedAt or endedAt');
           return { ok: false, images: [] };
@@ -2523,7 +2695,9 @@
         if (window.location.protocol === 'file:') {
           console.warn('[TideImageUpload] Running on file:// protocol - image fetch skipped (use local HTTP server)');
           return { ok: true, images: [], skipped: true, reason: 'file protocol' };
-        }      try {
+        }
+
+        try {
         const startDate = new Date(startedAt);
         const endDate = new Date(endedAt);
         
@@ -2559,26 +2733,31 @@
 
         console.log('[TideImageUpload] Total images to fetch:', filenames.length);
 
-        // GASプロキシ経由で画像をフェッチしてアップロード
-        const uploadedImages = [];
-        for (const filename of filenames) {
+        // ★案1修正：ループ外でトークンを一度だけ読み込み
+        const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+        if (latestToken) {
+          CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+        }
+
+        // ★案2修正：Promise.all で並列取得
+        const fetchTasks = filenames.map(async (filename) => {
           try {
             console.log('[TideImageUpload] Fetching via proxy:', filename);
             
-            // ★修正：Worker 経由で GAS にリクエスト（secrets 保護）
-            const proxyPayload = {
+            const gasPayload = {
               action: 'fetchTideImageViaProxy',
-              filename: filename
+              fileName: filename
             };
 
             const workerUrl = CONFIG.API.FISHING_TRIP_API_WORKER + '/api/upload';
+            
             const proxyRes = await fetch(workerUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'X-Auth-Token': CONFIG.API.WORKERS_AUTH_TOKEN
               },
-              body: JSON.stringify(proxyPayload)
+              body: JSON.stringify(gasPayload)
             });
 
             const proxyJson = await proxyRes.json();
@@ -2588,19 +2767,25 @@
                 fileId: proxyJson.fileId,
                 viewUrl: proxyJson.viewUrl
               });
-              uploadedImages.push({
+              return {
                 filename: filename,
                 fileId: proxyJson.fileId,
                 viewUrl: proxyJson.viewUrl,
                 timestamp: filename.replace(/[^\d]/g, '').slice(0, 12) // yyyymmddhhmm
-              });
+              };
             } else {
               console.warn('[TideImageUpload] Proxy fetch failed:', filename, proxyJson?.error);
+              return null;
             }
           } catch (err) {
             console.warn('[TideImageUpload] Error processing image:', filename, err);
+            return null;
           }
-        }
+        });
+
+        // ★案2修正：全タスクを並列実行して結果を収集
+        const results = await Promise.all(fetchTasks);
+        const uploadedImages = results.filter(r => r !== null);
 
         console.log('[TideImageUpload] Completed. Uploaded', uploadedImages.length, 'images');
         return { ok: true, images: uploadedImages };
@@ -3009,12 +3194,12 @@
       return (isFinite(h)?h:0)*60 + (isFinite(m)?m:0);
     }
 
-    function drawTideChartOnCanvas(canvas, chart){
+    function drawTideChartOnCanvas(canvas, chart, catches = []){
       const ctx = canvas.getContext('2d');
-      const W = 720, H = 260;
+      const W = 720, H = 320;
       canvas.width = W; canvas.height = H;
 
-      const padding = { left: 48, right: 16, top: 16, bottom: 28 };
+      const padding = { left: 56, right: 20, top: 28, bottom: 40 };
       const innerW = W - padding.left - padding.right;
       const innerH = H - padding.top - padding.bottom;
 
@@ -3022,7 +3207,7 @@
       if (!tideList.length){
         ctx.clearRect(0,0,W,H);
         ctx.fillStyle = "#94a3b8";
-        ctx.font = "12px sans-serif";
+        ctx.font = "14px sans-serif";
         ctx.fillText("この日の潮汐データがありません", 16, 24);
         return;
       }
@@ -3069,7 +3254,7 @@
       ctx.strokeRect(padding.left, padding.top, innerW, innerH);
 
       ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
       points.forEach((p,i)=>{
         const x = mapX(p.xMin);
@@ -3082,23 +3267,99 @@
       points.forEach(p=>{
         const x = mapX(p.xMin);
         const y = mapY(p.cm);
-        ctx.beginPath(); ctx.arc(x,y,2.2,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x,y,2.8,0,Math.PI*2); ctx.fill();
       });
 
       ctx.fillStyle = "#cbd5e1";
-      ctx.font = "11px sans-serif";
+      ctx.font = "13px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       [0,6,12,18,24].forEach(h=>{
         const x = mapX(h*60);
-        ctx.fillText(`${String(h).padStart(2,"0")}:00`, x, H - padding.bottom + 6);
+        ctx.fillText(`${String(h).padStart(2,"0")}:00`, x, H - padding.bottom + 8);
       });
 
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${Math.round(maxY)} cm`, padding.left - 6, mapY(maxY));
-      ctx.fillText(`0 cm`,              padding.left - 6, yZero);
-      ctx.fillText(`${Math.round(minY)} cm`, padding.left - 6, mapY(minY));
+      ctx.font = "13px sans-serif";
+      ctx.fillText(`${Math.round(maxY)} cm`, padding.left - 8, mapY(maxY));
+      ctx.fillText(`0 cm`,              padding.left - 8, yZero);
+      ctx.fillText(`${Math.round(minY)} cm`, padding.left - 8, mapY(minY));
+
+      // ★修正：catches が渡された場合のみ釣果マーカーを描画
+      if (Array.isArray(catches) && catches.length > 0) {
+        drawCatchMarkers(ctx, catches, mapX, mapY, H, padding);
+      }
+    }
+
+    // ★新規：釣果時刻をグラフ上にマークする関数
+    function drawCatchMarkers(ctx, catches, mapX, mapY, canvasHeight, padding) {
+      catches.forEach((c, idx) => {
+        if (!c.timestamp) return;
+        
+        try {
+          // timestamp を解析（ISO形式またはローカル形式）
+          const date = new Date(c.timestamp);
+          if (isNaN(date.getTime())) return;
+          
+          // 釣果時刻を分単位に変換
+          const hours = date.getHours();
+          const minutes = date.getMinutes();
+          const totalMinutes = hours * 60 + minutes;
+          
+          // グラフ上のX座標を計算
+          const x = mapX(totalMinutes);
+          
+          // マーカーを描画（垂直ライン）
+          ctx.strokeStyle = "#fbbf24";  // 黄色
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(x, padding.top);
+          ctx.lineTo(x, canvasHeight - padding.bottom);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          
+          // 上部に時刻ラベルを表示
+          ctx.fillStyle = "#fbbf24";
+          ctx.font = "bold 12px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          const timeLabel = `${String(hours).padStart(2,"0")}:${String(minutes).padStart(2,"0")}`;
+          ctx.fillText(timeLabel, x, padding.top - 4);
+          
+        } catch (e) {
+          // timestamp のパース失敗時はスキップ
+          console.warn('[drawCatchMarkers] Failed to parse timestamp:', c.timestamp, e);
+        }
+      });
+    }
+
+    // ★追加：釣果詳細のグラフを描画する関数
+    function renderCatchTideGraph(idx, catchItem) {
+      const chartContainer = document.getElementById(`catch-tide-chart-${idx}`);
+      const canvas = document.getElementById(`catch-tide-canvas-${idx}`);
+      
+      console.log(`[renderCatchTideGraph] idx=${idx}, tripId=${catchItem.tripId}, timestamp=${catchItem.timestamp}`);
+      
+      if (!chartContainer || !canvas) {
+        console.warn(`[renderCatchTideGraph] Missing DOM elements`);
+        return;
+      }
+
+      // tripId から tripsById マップで start_tide データを取得
+      const tripData = tripsById?.[catchItem.tripId];
+      
+      if (!tripData || !tripData.start_tide || !tripData.start_tide.chart) {
+        console.warn(`[renderCatchTideGraph] No tide data for tripId ${catchItem.tripId}`, { tripData: !!tripData, start_tide: !!tripData?.start_tide, chart: !!tripData?.start_tide?.chart });
+        chartContainer.classList.add('hidden');
+        return;
+      }
+
+      // グラフを描画（timestamp をそのまま使用）
+      console.log(`[renderCatchTideGraph] Drawing graph with timestamp=${catchItem.timestamp}`);
+      chartContainer.classList.remove('hidden');
+      drawTideChartOnCanvas(canvas, tripData.start_tide.chart, [catchItem]);
     }
 
     // ======== ★追加：水温地点マッチング & 当日水温取得（既存 Workers を使用） ========
@@ -3185,11 +3446,115 @@
     }
 
     async function fetchTodayWaterTempByNearest(lat, lon, targetDate = null){
+      await configInitPromise;
+      const provider = getConfiguredWaterTempProvider();
+      if (provider === 'mur') {
+        try {
+          const murResult = await fetchWaterTempViaGasMur(lat, lon, targetDate);
+          if (murResult) return murResult;
+        } catch (err) {
+          console.warn('[WaterTemp] MUR via GAS failed, falling back to Worker:', err?.message || err);
+          if (DEBUG_WATER) LOG.wt('fallback to Worker after MUR error', err?.message || err);
+        }
+      }
+      return await fetchWaterTempViaWorkerPoints(lat, lon, targetDate);
+    }
+
+    function normalizeWaterTempTargetIso(targetDate) {
+      if (!targetDate) return new Date().toISOString();
+      if (typeof targetDate === 'string') {
+        const trimmed = targetDate.trim();
+        if (!trimmed) return new Date().toISOString();
+        const base = trimmed.length <= 10 ? `${trimmed}T00:00:00Z` : trimmed;
+        const parsed = new Date(base);
+        return isNaN(parsed) ? new Date().toISOString() : parsed.toISOString();
+      }
+      if (typeof targetDate === 'object' && typeof targetDate.toISOString === 'function') {
+        try {
+          return targetDate.toISOString();
+        } catch (_) {
+          // fall through
+        }
+      }
+      const fallback = new Date(targetDate);
+      return isNaN(fallback) ? new Date().toISOString() : fallback.toISOString();
+    }
+
+    async function fetchWaterTempViaGasMur(lat, lon, targetDate = null) {
+      const isoTime = normalizeWaterTempTargetIso(targetDate);
+      const latestToken = await configStorage.getItem('WORKERS_AUTH_TOKEN');
+      if (latestToken) {
+        CONFIG.API.WORKERS_AUTH_TOKEN = latestToken;
+      }
+
+      const workerBase = CONFIG.API.FISHING_TRIP_API_WORKER;
+      if (!workerBase) throw new Error('FISHING_TRIP_API_WORKER が未設定です');
+      const workerUrl = `${workerBase.replace(/\/$/, '')}/api/upload`;
+
+      const payload = {
+        action: 'fetchWaterTemp',
+        method: 'mur',
+        lat,
+        lng: lon,
+        startedAt: isoTime
+      };
+
+      if (DEBUG_WATER) LOG.wt('requesting GAS water temp', { workerUrl, payload });
+
+      const res = await fetch(workerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Auth-Token': CONFIG.API.WORKERS_AUTH_TOKEN
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error('GASから無効なJSONが返されました');
+      }
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+
+      const tempRaw = json.bestValue ?? json.bestPoint?.value ?? null;
+      const tempNum = typeof tempRaw === 'number' ? tempRaw : parseFloat(tempRaw);
+      const snappedTime = json.bestPoint?.time || json.snappedTime || isoTime;
+      const dist = typeof json.bestDistanceKm === 'number' ? Math.round(json.bestDistanceKm * 10) / 10 : null;
+      const pointName = (() => {
+        if (json.bestPoint?.latitude != null && json.bestPoint?.longitude != null) {
+          const latStr = Number(json.bestPoint.latitude).toFixed(2);
+          const lonStr = Number(json.bestPoint.longitude).toFixed(2);
+          return `MUR格子 ${latStr},${lonStr}${dist != null ? ` / ${dist}km` : ''}`;
+        }
+        return 'MUR SST';
+      })();
+
+      const result = {
+        temperature_c: Number.isFinite(tempNum) ? Math.round(tempNum * 10) / 10 : null,
+        point_name: pointName,
+        date: snappedTime,
+        provider: 'mur_sst',
+        best_distance_km: dist,
+        _debug: DEBUG_WATER ? {
+          attempts: json.attempts?.length ?? 0,
+          radius: json.bestRadiusDeg ?? null,
+          host: json.host || null
+        } : undefined
+      };
+
+      if (DEBUG_WATER) LOG.wt('GAS water temp result', result);
+      return result;
+    }
+
+    async function fetchWaterTempViaWorkerPoints(lat, lon, targetDate = null){
       const tag = `[lat=${lat?.toFixed?.(5)}, lon=${lon?.toFixed?.(5)}]`;
       try{
-        // ★修正：CONFIG初期化完了を待機（API呼び出し前の必須処理）
-        await configInitPromise;
-        
         // ★修正：storage から最新の Worker URL を取得（必須）
         let waterWorkerUrl = CONFIG.API.WATER_WORKER_URL;
         try {
@@ -3916,14 +4281,14 @@
             // 釣行基本情報を入力欄に反映
             if (draft.startedAt) {
               const d = new Date(draft.startedAt);
-              editTripStarted.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+              editTripStarted.value = toLocalInputValue(d);
             } else {
               editTripStarted.value = '';
             }
 
             if (draft.endedAt) {
               const d = new Date(draft.endedAt);
-              editTripEnded.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+              editTripEnded.value = toLocalInputValue(d);
             } else {
               editTripEnded.value = '';
             }
@@ -4382,11 +4747,14 @@
     async function startTrip(){
       // ★修正：CONFIG初期化完了を待機（API呼び出し前の必須処理）
       await configInitPromise;
-      
-      if (draft.status==='active') return;
-      draft.status='active'; draft.startedAt=nowIsoLocal();
+      showUploadingOverlay('釣行を開始しています...');
 
+      let startedThisCall = false;
       try{
+        if (draft.status==='active') return;
+        draft.status='active'; draft.startedAt=nowIsoLocal();
+        startedThisCall = true;
+
         if (navigator.geolocation){
           await new Promise(res=>{
             navigator.geolocation.getCurrentPosition(
@@ -4428,9 +4796,18 @@
 
       }catch(e){
         console.warn("[startTrip] unexpected error:", e?.message || e);
-      } 
-      saveDraft(draft);
-      render();
+      } finally {
+        try {
+          if (startedThisCall){
+            await saveDraft(draft);
+            render();
+          }
+        } catch (finalErr) {
+          console.error('[startTrip] finalize error:', finalErr);
+        } finally {
+          hideUploadingOverlay();
+        }
+      }
     }
 
     // ★追加：既存釣果（配列形式）をオブジェクト形式に正規化する関数
@@ -4489,70 +4866,6 @@
       inpSpecies.value=''; inpSize.value=''; inpWeight.value=''; inpMethod.value=''; inpPhoto.value='';
       imgPreview.src=''; imgPreview.classList.add('hidden');
 
-      // ★追加：年フィールド制限ロジック（手動釣行登録と同じ）
-      if (inpCatchTime) {
-        if (inpCatchTime._inputHandler) {
-          inpCatchTime.removeEventListener('input', inpCatchTime._inputHandler);
-        }
-        if (inpCatchTime._keydownHandler) {
-          inpCatchTime.removeEventListener('keydown', inpCatchTime._keydownHandler);
-        }
-        
-        inpCatchTime._keydownHandler = (evt) => {
-          if (evt.key.match(/[0-9]/)) {
-            const digits = inpCatchTime.value.replace(/\D/g, '');
-            if (digits.length >= 4) {
-              setTimeout(() => {
-                const newDigits = inpCatchTime.value.replace(/\D/g, '');
-                if (newDigits.length > 4) {
-                  const y  = newDigits.slice(0, 4);
-                  const mo = newDigits.slice(4, 6);
-                  const d  = newDigits.slice(6, 8);
-                  const hh = newDigits.slice(8, 10);
-                  const mm = newDigits.slice(10, 12);
-
-                  let formatted = y;
-                  if (mo) formatted += '-' + mo;
-                  if (d)  formatted += '-' + d;
-                  if (hh) formatted += 'T' + hh;
-                  if (mm) formatted += ':' + mm;
-
-                  inpCatchTime.value = formatted;
-                }
-              }, 0);
-            }
-          }
-        };
-
-        inpCatchTime._inputHandler = () => {
-          const digits = inpCatchTime.value.replace(/\D/g, '');
-          
-          if (!digits) {
-            inpCatchTime.value = '';
-            return;
-          }
-
-          const y  = digits.slice(0, 4);
-          const mo = digits.slice(4, 6);
-          const d  = digits.slice(6, 8);
-          const hh = digits.slice(8, 10);
-          const mm = digits.slice(10, 12);
-
-          let formatted = y;
-          if (mo) formatted += '-' + mo;
-          if (d)  formatted += '-' + d;
-          if (hh) formatted += 'T' + hh;
-          if (mm) formatted += ':' + mm;
-
-          if (formatted !== inpCatchTime.value) {
-            inpCatchTime.value = formatted;
-          }
-        };
-
-        inpCatchTime.addEventListener('keydown', inpCatchTime._keydownHandler);
-        inpCatchTime.addEventListener('input', inpCatchTime._inputHandler);
-      }
-
       catchModal.classList.remove('hidden');
       console.log('[openAddCatch] catchModal display state:', {
         classList: catchModal.className,
@@ -4566,70 +4879,6 @@
       try{ inpCatchTime.value = toLocalInputValue(new Date(catchForm.timestamp)); }catch{ inpCatchTime.value=''; }
       inpSpecies.value=catchForm.species||''; inpSize.value=(catchForm.size_cm??''); inpWeight.value=(catchForm.weight_g??''); inpMethod.value=catchForm.method||'';
       inpPhoto.value=''; if (catchForm.photoPreviewUrl){ imgPreview.src=catchForm.photoPreviewUrl; imgPreview.classList.remove('hidden'); } else { imgPreview.src=''; imgPreview.classList.add('hidden'); }
-
-      // ★追加：年フィールド制限ロジック（編集時も適用）
-      if (inpCatchTime) {
-        if (inpCatchTime._inputHandler) {
-          inpCatchTime.removeEventListener('input', inpCatchTime._inputHandler);
-        }
-        if (inpCatchTime._keydownHandler) {
-          inpCatchTime.removeEventListener('keydown', inpCatchTime._keydownHandler);
-        }
-        
-        inpCatchTime._keydownHandler = (evt) => {
-          if (evt.key.match(/[0-9]/)) {
-            const digits = inpCatchTime.value.replace(/\D/g, '');
-            if (digits.length >= 4) {
-              setTimeout(() => {
-                const newDigits = inpCatchTime.value.replace(/\D/g, '');
-                if (newDigits.length > 4) {
-                  const y  = newDigits.slice(0, 4);
-                  const mo = newDigits.slice(4, 6);
-                  const d  = newDigits.slice(6, 8);
-                  const hh = newDigits.slice(8, 10);
-                  const mm = newDigits.slice(10, 12);
-
-                  let formatted = y;
-                  if (mo) formatted += '-' + mo;
-                  if (d)  formatted += '-' + d;
-                  if (hh) formatted += 'T' + hh;
-                  if (mm) formatted += ':' + mm;
-
-                  inpCatchTime.value = formatted;
-                }
-              }, 0);
-            }
-          }
-        };
-
-        inpCatchTime._inputHandler = () => {
-          const digits = inpCatchTime.value.replace(/\D/g, '');
-          
-          if (!digits) {
-            inpCatchTime.value = '';
-            return;
-          }
-
-          const y  = digits.slice(0, 4);
-          const mo = digits.slice(4, 6);
-          const d  = digits.slice(6, 8);
-          const hh = digits.slice(8, 10);
-          const mm = digits.slice(10, 12);
-
-          let formatted = y;
-          if (mo) formatted += '-' + mo;
-          if (d)  formatted += '-' + d;
-          if (hh) formatted += 'T' + hh;
-          if (mm) formatted += ':' + mm;
-
-          if (formatted !== inpCatchTime.value) {
-            inpCatchTime.value = formatted;
-          }
-        };
-
-        inpCatchTime.addEventListener('keydown', inpCatchTime._keydownHandler);
-        inpCatchTime.addEventListener('input', inpCatchTime._inputHandler);
-      }
 
       catchModal.classList.remove('hidden');
     }
@@ -4794,7 +5043,10 @@
       const treatAsManual = manualCatchMode || !!draft.manualStarted; // ★追加
       let whenLocal = null;
       if (inpCatchTime.value) {
-        whenLocal = toOffsetIsoLocal(new Date(inpCatchTime.value));
+        const parsed = parseDisplayDatetime(inpCatchTime.value.trim());
+        if (parsed) {
+          whenLocal = toOffsetIsoLocal(parsed);
+        }
       } else if (!treatAsManual) {
         // 自動記録など“手動ではない”ときのみ現在時刻で補完
         whenLocal = nowIsoLocal();
@@ -4807,13 +5059,6 @@
       catchForm.size_cm   = inpSize.value ? Number(inpSize.value) : null;
       catchForm.weight_g  = inpWeight.value ? Number(inpWeight.value) : null;
       catchForm.method    = inpMethod.value || '';
-
-      // 天気
-      let wx = null;
-      if (typeof draft.lat === 'number' && typeof draft.lng === 'number'){
-        try { wx = await fetchWeather(draft.lat, draft.lng); } catch(e){ console.error('[3940] fetchWeather error:', e); }
-      }
-      catchForm.weather = wx;
 
       // ★修正：潮汐ロジックは写真処理(EXIF)後に移動
 
@@ -4874,6 +5119,14 @@
         // 写真なしの時の観測ログ
         LOG.app("[EXIF] skip (no photo selected). catch timestamp?", { hasTimestamp: !!catchForm.timestamp });
       }
+
+      // 天気
+      let wx = null;
+      const weatherTargetDate = catchForm.timestamp || whenLocal || null;
+      if (typeof draft.lat === 'number' && typeof draft.lng === 'number'){
+        try { wx = await fetchWeather(draft.lat, draft.lng, weatherTargetDate); } catch(e){ console.error('[3940] fetchWeather error:', e); }
+      }
+      catchForm.weather = wx;
 
       // ★修正後：EXIF補完後に潮汐ロジックを実行
       // --- 潮位/傾向/港名/満潮・干潮 ---
@@ -4986,23 +5239,7 @@
       closeCatchModal();
 
       // ★修正①: 手動釣行時に登録釣果から開始/終了時刻を算出（render前に実行）
-      if (manualCatchMode || !!draft.manualStarted) {
-        const validTimes = draft.catches
-          .map(c => c.timestamp)
-          .filter(ts => !!ts);
-        
-        if (validTimes.length > 0) {
-          // ★釣果がある場合：釣果タイムスタンプから時刻を設定
-          const earliestTime = validTimes.reduce((a, b) => a < b ? a : b);
-          const latestTime = validTimes.reduce((a, b) => a > b ? a : b);
-          
-          draft.startedAt = earliestTime;
-          draft.endedAt = latestTime;
-          saveDraft(draft);
-          console.log('[submitCatch] Auto-calculated times from catches:', { startedAt: draft.startedAt, endedAt: draft.endedAt });
-        }
-        // ★釣果がない場合は何もしない（既存の draft.startedAt/endedAt を保持）
-      }
+      // 手動釣行中は補完処理を握らず、釣行終了時にまとめて補完する
 
       render();
 
@@ -5017,15 +5254,11 @@
 
       // ★変更：手動モード時はモーダル表示なしで補完ロジックのみを実行
       if (manualCatchMode || !!draft.manualStarted) {
-        // ★修正：手動釣行モード時は補完完了後にオーバーレイを消す（アップロード確認は表示しない）
-        await _complementTripDataOnly();   // ← ステータス画面更新のみ、モーダル表示なし
         hideUploadingOverlay();
       } else if (!editMode) {
-        // ★修正：通常の釣果登録時はモーダル表示後にオーバーレイを消す
         openUploadReview();
         hideUploadingOverlay();
       } else {
-        // ★修正：編集モード時は即座にオーバーレイを消す
         hideUploadingOverlay();
       }
       } catch (e) {
@@ -5263,15 +5496,21 @@
     const editTripWaterTemp = document.getElementById('editTripWaterTemp');
     const editCatchList = document.getElementById('editCatchList');
     const editCatchCount = document.getElementById('editCatchCount');
+    const editFormCatchTime = document.getElementById('editFormCatchTime');
     
     // ★追加: 手動釣行モーダル要素
     const tripModal   = document.getElementById('tripModal');
     const inpTripStart= document.getElementById('inpTripStart');
+    const inpTripEnd  = document.getElementById('inpTripEnd');
     const inpTripLat  = document.getElementById('inpTripLat');
     const inpTripLng  = document.getElementById('inpTripLng');
     const btnCloseTripModal = document.getElementById('btnCloseTripModal');
     const btnCancelTripModal = document.getElementById('btnCancelTripModal');
     const btnSaveTrip   = document.getElementById('btnSaveTrip');
+
+    [inpCatchTime, editFormCatchTime, inpTripStart, inpTripEnd, editTripStarted, editTripEnded]
+      .filter(Boolean)
+      .forEach(applyNumericDatetimeMask);
 
     // ★修正：釣行モーダルのキャンセルボタン
     if (btnCloseTripModal) btnCloseTripModal.onclick = ()=> {
@@ -5596,8 +5835,25 @@
         const canvas = document.createElement('canvas');
         canvas.className = 'w-full h-[260px] bg-slate-950 rounded-lg';
         tideWrap.appendChild(canvas);
+        
+        // ★修正：凡例を追加
+        const legend = document.createElement('div');
+        legend.className = 'mt-2 text-xs text-slate-400 flex flex-wrap gap-2';
+        legend.innerHTML = `
+          <span class="flex items-center gap-1">
+            <div class="w-3 h-px bg-cyan-400"></div>
+            潮汐
+          </span>
+          <span class="flex items-center gap-1">
+            <div class="w-3 h-px border-t-2 border-dashed border-amber-400"></div>
+            釣果時刻
+          </span>
+        `;
+        tideWrap.appendChild(legend);
+        
         sum.appendChild(tideWrap);
-        setTimeout(()=> drawTideChartOnCanvas(canvas, draft.start_tide.chart), 0);
+        // ★修正：catches を第3パラメータとして渡す
+        setTimeout(()=> drawTideChartOnCanvas(canvas, draft.start_tide.chart, cts), 0);
       }
 
       const list = document.createElement('div');
@@ -5810,6 +6066,12 @@
 
       // ★修正：手動釣行でも終了天気を取得してアップロード確認へ
       if (draft.manualStarted) {
+        if (!draft.endedAt) {
+          hideUploadingOverlay();
+          try { alert('終了日時を入力してください。'); } catch {}
+          openManualTripForm({ reuseDraft: true, focusEnd: true });
+          return;
+        }
         let endWx = null;
         if (typeof draft.lat === 'number' && typeof draft.lng === 'number'){
           try { endWx = await fetchWeather(draft.lat, draft.lng, draft.endedAt); } catch(e){ console.error('[4747] fetchWeather error:', e); }
@@ -5879,8 +6141,25 @@
           const canvas_manual = document.createElement('canvas');
           canvas_manual.className = 'w-full h-[260px] bg-slate-950 rounded-lg';
           tideWrap_manual.appendChild(canvas_manual);
+          
+          // ★修正：凡例を追加
+          const legend_manual = document.createElement('div');
+          legend_manual.className = 'mt-2 text-xs text-slate-400 flex flex-wrap gap-2';
+          legend_manual.innerHTML = `
+            <span class="flex items-center gap-1">
+              <div class="w-3 h-px bg-cyan-400"></div>
+              潮汐
+            </span>
+            <span class="flex items-center gap-1">
+              <div class="w-3 h-px border-t-2 border-dashed border-amber-400"></div>
+              釣果時刻
+            </span>
+          `;
+          tideWrap_manual.appendChild(legend_manual);
+          
           sum_manual.appendChild(tideWrap_manual);
-          setTimeout(()=> drawTideChartOnCanvas(canvas_manual, draft.start_tide.chart), 0);
+          // ★修正：catches を第3パラメータとして渡す
+          setTimeout(()=> drawTideChartOnCanvas(canvas_manual, draft.start_tide.chart, cts_manual), 0);
         }
 
         const list_manual = document.createElement('div');
@@ -5981,27 +6260,21 @@
       });
 
       // startedAt 再評価
-      // ★修正：手動釣行と自動釣行の両方で、最初に設定された開始日時を保持する
       if (cts.length) {
-        // 通常釣行が釣行完了時：最初の釣果タイムスタンプで startedAt を再計算
-        // 手動釣行：startedAt を保護（変更しない）
-        const shouldComplementStartedAt = !draft.startedAt || 
-          (!draft.manualStarted && draft.status === 'ended');
-        
-        if (shouldComplementStartedAt) {
-          const xs = cts
-            .filter(c => c.timestamp != null)
-            .map(c => ({ t: new Date(c.timestamp).getTime(), raw: c.timestamp }))
-            .filter(x => isFinite(x.t));
-          if (xs.length) {
-            const min = xs.reduce((a,b)=> a.t<b.t ? a : b);
-            draft.startedAt = toOffsetIsoLocal(new Date(min.t));
-            LOG.app("[Complement] decided startedAt", { startedAt: draft.startedAt, sample: xs[0]?.raw || null, manualStarted: draft.manualStarted });
-          } else {
-            LOG.app("[Complement] startedAt not decided (no valid timestamps)");
-          }
+        const hasManualFlag = !!draft.manualStarted;
+        const timestamps = cts
+          .filter(c => c.timestamp != null)
+          .map(c => ({ t: new Date(c.timestamp).getTime(), raw: c.timestamp }))
+          .filter(x => isFinite(x.t));
+
+        if (!timestamps.length) {
+          LOG.app("[Complement] startedAt not decided (no valid timestamps)");
+        } else if (!draft.startedAt) {
+          const min = timestamps.reduce((a,b)=> a.t<b.t ? a : b);
+          draft.startedAt = toOffsetIsoLocal(new Date(min.t));
+          LOG.app("[Complement] decided startedAt (filled)", { startedAt: draft.startedAt, sample: timestamps[0]?.raw || null });
         } else {
-          LOG.app("[Complement] skipped startedAt (startedAt already set)", { manualStarted: draft.manualStarted, startedAt: draft.startedAt });
+          LOG.app("[Complement] kept startedAt", { startedAt: draft.startedAt, manual: !!hasManualFlag });
         }
       }
       
@@ -6096,7 +6369,12 @@
           
           // 過去データが見つからない場合は現在の水温を取得
           if (!waterTemp) {
-            waterTemp = await fetchTodayWaterTempByNearest(draft.lat, draft.lng);
+            const fallbackTargetDate = draft.startedAt || null;
+            waterTemp = await fetchTodayWaterTempByNearest(
+              draft.lat,
+              draft.lng,
+              fallbackTargetDate
+            );
           }
           
           draft.start_water_temp = waterTemp;
@@ -6256,97 +6534,34 @@
     // 初期表示後に一度だけ試行
     setTimeout(() => retryUploadQueue(), 1000);
 
-    function openManualTripForm(){
+    function openManualTripForm(arg){
+      const opts = (arg && typeof arg === 'object' && !('target' in arg) && !('currentTarget' in arg)) ? arg : {};
+      const { reuseDraft = false, focusEnd = false } = opts;
       // ★追加: モーダル親の recordView を表示させる（親の hidden を外す）
       showView('record');
 
-      // 入力初期化
       try {
-        inpTripStart.value = '';
-        inpTripLat.value   = (typeof draft.lat==='number') ? String(draft.lat) : '';
-        inpTripLng.value   = (typeof draft.lng==='number') ? String(draft.lng) : '';
-      } catch(_) {}
-
-      // 入力初期化
-      try {
-        inpTripStart.value = '';
-        inpTripLat.value   = (typeof draft.lat==='number') ? String(draft.lat) : '';
-        inpTripLng.value   = (typeof draft.lng==='number') ? String(draft.lng) : '';
+        if (reuseDraft) {
+          inpTripStart && (inpTripStart.value = draft.startedAt ? toLocalInputValue(new Date(draft.startedAt)) : '');
+          inpTripLat   && (inpTripLat.value   = (typeof draft.lat === 'number') ? String(draft.lat) : '');
+          inpTripLng   && (inpTripLng.value   = (typeof draft.lng === 'number') ? String(draft.lng) : '');
+          inpTripEnd   && (inpTripEnd.value   = draft.endedAt ? toLocalInputValue(new Date(draft.endedAt)) : '');
+        } else {
+          inpTripStart && (inpTripStart.value = '');
+          inpTripLat   && (inpTripLat.value   = (typeof draft.lat === 'number') ? String(draft.lat) : '');
+          inpTripLng   && (inpTripLng.value   = (typeof draft.lng === 'number') ? String(draft.lng) : '');
+          inpTripEnd   && (inpTripEnd.value   = '');
+        }
       } catch(_) {}
 
       // ★修正：年は4桁に厳密に制限（keydown + input で確実に制御）
-      if (inpTripStart) {
-        // 古いハンドラをクリア
-        if (inpTripStart._inputHandler) {
-          inpTripStart.removeEventListener('input', inpTripStart._inputHandler);
-        }
-        if (inpTripStart._keydownHandler) {
-          inpTripStart.removeEventListener('keydown', inpTripStart._keydownHandler);
-        }
-        
-        // keydown：5文字目入力を検知して、年を切り詰める
-        inpTripStart._keydownHandler = (evt) => {
-          if (evt.key.match(/[0-9]/)) {
-            const digits = inpTripStart.value.replace(/\D/g, '');
-            // 年が既に4桁あり、5文字目以降を入力しようとしているなら許可しない
-            if (digits.length >= 4) {
-              // 5文字目を入力する際は、イベント直後に値を書き直す
-              setTimeout(() => {
-                const newDigits = inpTripStart.value.replace(/\D/g, '');
-                if (newDigits.length > 4) {
-                  // 年を4桁に制限し、5文字目以降を月・日・時・分に振り分ける
-                  const y  = newDigits.slice(0, 4);
-                  const mo = newDigits.slice(4, 6);
-                  const d  = newDigits.slice(6, 8);
-                  const hh = newDigits.slice(8, 10);
-                  const mm = newDigits.slice(10, 12);
-
-                  let formatted = y;
-                  if (mo) formatted += '-' + mo;
-                  if (d)  formatted += '-' + d;
-                  if (hh) formatted += 'T' + hh;
-                  if (mm) formatted += ':' + mm;
-
-                  inpTripStart.value = formatted;
-                }
-              }, 0);
-            }
-          }
-        };
-
-        inpTripStart._inputHandler = () => {
-          const digits = inpTripStart.value.replace(/\D/g, '');
-          
-          if (!digits) {
-            inpTripStart.value = '';
-            return;
-          }
-
-          const y  = digits.slice(0, 4);
-          const mo = digits.slice(4, 6);
-          const d  = digits.slice(6, 8);
-          const hh = digits.slice(8, 10);
-          const mm = digits.slice(10, 12);
-
-          let formatted = y;
-          if (mo) formatted += '-' + mo;
-          if (d)  formatted += '-' + d;
-          if (hh) formatted += 'T' + hh;
-          if (mm) formatted += ':' + mm;
-
-          if (formatted !== inpTripStart.value) {
-            inpTripStart.value = formatted;
-          }
-        };
-
-        inpTripStart.addEventListener('keydown', inpTripStart._keydownHandler);
-        inpTripStart.addEventListener('input', inpTripStart._inputHandler);
-      }
-
       // ★追加: 要素未挿入時の安全対策
       if (!tripModal) { alert('釣行入力モーダルのHTML（id="tripModal"）が見つかりません。HTMLを確認してください。'); return; }
 
       tripModal.classList.remove('hidden');
+      if (focusEnd && inpTripEnd) {
+        setTimeout(() => inpTripEnd.focus(), 0);
+      }
     }
 
     // ★追記: 手動釣果フォーム（最小項目）
@@ -6392,15 +6607,25 @@
       await configInitPromise;
       
       let startedIso = null;
+      let endedIso = null;
       let lat = null, lng = null;
 
       // 1) モーダル入力のみ採用（未入力は未設定のまま）
       if (inpTripStart && inpTripStart.value) {
-        try {
-          startedIso = toOffsetIsoLocal(new Date(inpTripStart.value));
-        } catch(e) {
-          console.warn("[TripManual] Failed to parse start time:", e);
+        const parsed = parseDisplayDatetime(inpTripStart.value.trim());
+        if (parsed) {
+          startedIso = toOffsetIsoLocal(parsed);
+        } else {
+          console.warn('[TripManual] Failed to parse start time:', inpTripStart.value);
           startedIso = null;
+        }
+      }
+      if (inpTripEnd && inpTripEnd.value) {
+        const parsed = parseDisplayDatetime(inpTripEnd.value.trim());
+        if (parsed) {
+          endedIso = toOffsetIsoLocal(parsed);
+        } else {
+          console.warn('[TripManual] Failed to parse end time:', inpTripEnd.value);
         }
       }
       if (inpTripLat && inpTripLat.value)     lat = Number(inpTripLat.value);
@@ -6412,11 +6637,7 @@
       draft.status        = 'active';
       draft.startedAt     = startedIso;  // ★修正: null の場合は null のまま
       draft.manualStarted = true; // ★追加：手動開始フラグを明示的にON
-      
-      // ★修正①: 釣果がない場合に備えて、endedAt を現在時刻で初期化
-      if (!draft.endedAt) {
-        draft.endedAt = nowIsoLocal();  // 釣行終了時刻の初期値
-      }
+      draft.endedAt       = endedIso;
       
       if (typeof lat === 'number' && typeof lng === 'number' && isFinite(lat) && isFinite(lng)) {
         draft.lat = lat;
@@ -6457,7 +6678,12 @@
             
             // 過去データが見つからない、または開始日が今日の場合は現在の水温を取得
             if (!waterTemp) {
-              waterTemp = await fetchTodayWaterTempByNearest(draft.lat, draft.lng);
+              const fallbackTargetDate = draft.startedAt || null;
+              waterTemp = await fetchTodayWaterTempByNearest(
+                draft.lat,
+                draft.lng,
+                fallbackTargetDate
+              );
             }
             
             draft.start_water_temp = waterTemp;
@@ -6580,14 +6806,14 @@
       // 釣行基本情報を入力欄に反映
       if (draft.startedAt) {
         const d = new Date(draft.startedAt);
-        editTripStarted.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        editTripStarted.value = toLocalInputValue(d);
       } else {
         editTripStarted.value = '';
       }
 
       if (draft.endedAt) {
         const d = new Date(draft.endedAt);
-        editTripEnded.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        editTripEnded.value = toLocalInputValue(d);
       } else {
         editTripEnded.value = '';
       }
@@ -6779,13 +7005,12 @@
         // 入力値から日時と位置を取得
         let startedAt = null;
         if (editTripStarted.value) {
-          try {
-            const dt = new Date(editTripStarted.value.replace(' ', 'T'));
-            startedAt = toOffsetIsoLocal(dt);
-          } catch (e) {
+          const parsed = parseDisplayDatetime(editTripStarted.value.trim());
+          if (!parsed) {
             alert('開始日時の形式が正しくありません');
             return;
           }
+          startedAt = toOffsetIsoLocal(parsed);
         }
         
         let lat = parseFloat(editTripLat.value);
@@ -6881,19 +7106,26 @@
           try {
             const exifDate = await extractExifDate(file);
             console.log('[EditModal] EXIF date extracted:', exifDate);
-            if (exifDate) {
-              // EXIF 日時形式: "YYYY:MM:DD HH:MM:SS" → "YYYY-MM-DDTHH:MM"
-              const [datePart, timePart] = exifDate.split(' ');
-              if (datePart && timePart) {
-                const [y, mo, d] = datePart.split(':');
-                const [hh, mm] = timePart.split(':');
-                const formattedDateTime = `${y}-${mo}-${d}T${hh}:${mm}`;
-                const timeInput = document.getElementById('editFormCatchTime');
-                if (timeInput && !timeInput.value) {
-                  timeInput.value = formattedDateTime;
+              if (exifDate) {
+                // EXIF 日時形式: "YYYY:MM:DD HH:MM:SS"
+                const [datePart, timePart] = exifDate.split(' ');
+                if (datePart && timePart) {
+                  const [y, mo, d] = datePart.split(':');
+                  const [hh, mm, ss] = timePart.split(':');
+                  const dt = new Date(
+                    Number(y),
+                    Number(mo) - 1,
+                    Number(d),
+                    Number(hh),
+                    Number(mm),
+                    Number(ss || '0')
+                  );
+                  const timeInput = document.getElementById('editFormCatchTime');
+                  if (timeInput && !timeInput.value && !isNaN(dt.getTime())) {
+                    timeInput.value = toLocalInputValue(dt);
+                  }
                 }
               }
-            }
           } catch (err) {
             console.warn('[EditModal] Failed to extract EXIF date:', err);
           }
@@ -6960,89 +7192,74 @@
           alert('魚種を入力してください');
           return;
         }
-        
-        // 新しい釣果オブジェクトを作成
-        const newCatch = {
-          id: uuid(),  // ★追加：catchId を生成
-          tripId: draft.tripId,
-          timestamp: null,
-          species: species,
-          size_cm: size ? parseFloat(size) : null,
-          weight_g: weight ? parseFloat(weight) : null,
-          method: method || '',
-          
-          // ★追加：天気情報（釣行の開始天気から初期設定）
-          wx_temp: draft.start_weather?.temp ?? null,
-          wx_wind_speed: draft.start_weather?.wind_speed ?? null,
-          wx_wind_deg: draft.start_weather?.wind_deg ?? null,
-          wx_main: draft.start_weather?.weather_main ?? null,
-          wx_desc: draft.start_weather?.weather_description ?? null,
-          
-          // ★追加：潮汐情報（後で補完）
-          tide_trend: null,  // ★潮汐ロジックで補完予定
-          tide_level_cm: null,  // ★潮汐ロジックで補完予定
-          tide_name: draft.start_tide?.tideName ?? null,
-          tide_harbor_name: draft.start_tide?.harbor?.hn ?? null,
-          tide_high_times: draft.start_tide?.high_times ?? null,
-          tide_low_times: draft.start_tide?.low_times ?? null,
-          
-          // ★追加：水温情報（釣行の開始水温から初期設定）
-          water_temp_c: draft.start_water_temp?.temperature_c ?? null,
-          water_temp_point: draft.start_water_temp?.point_name ?? null,
-          water_temp_time: draft.start_water_temp?.date ?? null,
-          
-          // 写真
-          weather: draft.weather || null,
-          photoFileId: null,
-          photoDriveUrl: null,
-          photoDriveThumbUrl: null
-        };
-        
-        // タイムスタンプを設定
         const editFormSection = document.getElementById('editCatchFormSection');
         const isEditing = editFormSection?.dataset.isEditing === 'true';
         const editingIndex = parseInt(editFormSection?.dataset.editingIndex) || -1;
+        const overlayMessage = isEditing ? '釣果を更新しています...' : '釣果を追加しています...';
         
-        if (isEditing && editingIndex >= 0 && editingIndex < draft.catches.length) {
-          // ★編集モード：編集元の釣果があればそのtimestampを保持
-          const existingCatch = draft.catches[editingIndex];
-          if (timeInput) {
-            // timeInputが入力されている場合は新しい値を使う
-            if (timeInput.includes('T')) {
-              newCatch.timestamp = new Date(timeInput).toISOString();
-            } else if (timeInput.includes(':')) {
-              const [hh, mm, ss] = timeInput.split(':').map(x => parseInt(x) || 0);
-              const now = new Date();
-              newCatch.timestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, ss).toISOString();
+        showUploadingOverlay(overlayMessage);
+        try {
+          // 新しい釣果オブジェクトを作成
+          const newCatch = {
+            id: uuid(),  // ★追加：catchId を生成
+            tripId: draft.tripId,
+            timestamp: null,
+            species: species,
+            size_cm: size ? parseFloat(size) : null,
+            weight_g: weight ? parseFloat(weight) : null,
+            method: method || '',
+            
+            // ★追加：天気情報（釣行の開始天気から初期設定）
+            wx_temp: draft.start_weather?.temp ?? null,
+            wx_wind_speed: draft.start_weather?.wind_speed ?? null,
+            wx_wind_deg: draft.start_weather?.wind_deg ?? null,
+            wx_main: draft.start_weather?.weather_main ?? null,
+            wx_desc: draft.start_weather?.weather_description ?? null,
+            
+            // ★追加：潮汐情報（後で補完）
+            tide_trend: null,  // ★潮汐ロジックで補完予定
+            tide_level_cm: null,  // ★潮汐ロジックで補完予定
+            tide_name: draft.start_tide?.tideName ?? null,
+            tide_harbor_name: draft.start_tide?.harbor?.hn ?? null,
+            tide_high_times: draft.start_tide?.high_times ?? null,
+            tide_low_times: draft.start_tide?.low_times ?? null,
+            
+            // ★追加：水温情報（釣行の開始水温から初期設定）
+            water_temp_c: draft.start_water_temp?.temperature_c ?? null,
+            water_temp_point: draft.start_water_temp?.point_name ?? null,
+            water_temp_time: draft.start_water_temp?.date ?? null,
+            
+            // 写真
+            weather: draft.weather || null,
+            photoFileId: null,
+            photoDriveUrl: null,
+            photoDriveThumbUrl: null
+          };
+          
+          // タイムスタンプを設定
+          const parsedTime = parseDisplayDatetime(timeInput);
+          if (isEditing && editingIndex >= 0 && editingIndex < draft.catches.length) {
+            // ★編集モード：編集元の釣果があればそのtimestampを保持
+            const existingCatch = draft.catches[editingIndex];
+            if (timeInput) {
+              if (parsedTime) {
+                newCatch.timestamp = parsedTime.toISOString();
+              } else {
+                console.warn('[EditModal] invalid time input, keeping existing timestamp:', timeInput);
+                newCatch.timestamp = existingCatch.timestamp;
+              }
+            } else {
+              // timeInputが空の場合は編集元の時刻を保持
+              newCatch.timestamp = existingCatch.timestamp;
             }
           } else {
-            // timeInputが空の場合は編集元の時刻を保持
-            newCatch.timestamp = existingCatch.timestamp;
-          }
-        } else {
-          // ★追加モード：通常のタイムスタンプ設定
-          if (timeInput) {
-            // YYYY-MM-DDTHH:MM形式またはHH:MM:SS形式に対応
-            if (timeInput.includes('T')) {
-              // YYYY-MM-DDTHH:MM形式
-              newCatch.timestamp = new Date(timeInput).toISOString();
-            } else if (timeInput.includes(':')) {
-              // HH:MM:SS形式 → 今日の日付 + 指定時間
-              const [hh, mm, ss] = timeInput.split(':').map(x => parseInt(x) || 0);
-              const now = new Date();
-              newCatch.timestamp = new Date(
-                now.getFullYear(), 
-                now.getMonth(), 
-                now.getDate(), 
-                hh, 
-                mm, 
-                ss
-              ).toISOString();
+            // ★追加モード：通常のタイムスタンプ設定
+            if (parsedTime) {
+              newCatch.timestamp = parsedTime.toISOString();
+            } else {
+              newCatch.timestamp = new Date().toISOString();
             }
-          } else {
-            newCatch.timestamp = new Date().toISOString();
           }
-        }
         
         // ★修正：写真のアップロード処理（新規作成時、編集時の両方で写真変更可能）
         if (photoInput && photoInput.files && photoInput.files.length > 0) {
@@ -7067,245 +7284,251 @@
           newCatch.photoDriveThumbUrl = existingCatch.photoDriveThumbUrl;
         }
         
-        // ★潮汐情報を補完するロジック（submitCatch と同じ）
-        if (newCatch.timestamp && typeof draft.lat === 'number' && typeof draft.lng === 'number') {
-          const dkey = dateKeyFromIso(newCatch.timestamp);
-          
-          try {
-            let dayChart = null;
-            // draft.tide_daily_cache にキャッシュがあるか確認
-            if (draft.tide_daily_cache?.[dkey]?.chart) {
-              dayChart = draft.tide_daily_cache[dkey].chart;
-              const info = tideInfoFromChart(dayChart, newCatch.timestamp);
-              newCatch.tide_level_cm = info.level_cm;
-              newCatch.tide_trend = info.trend_text;
-              console.log('[EditModal] Tide from cache:', info);
-            } else {
-              // キャッシュになければ API から取得
-              const pack = await getTideChartForDate(draft.lat, draft.lng, newCatch.timestamp);
-              if (pack?.chart) {
-                dayChart = pack.chart;
-                draft.tide_daily_cache = draft.tide_daily_cache || {};
-                draft.tide_daily_cache[dkey] = { harbor: pack.harbor || null, chart: pack.chart };
-                const info = tideInfoFromChart(pack.chart, newCatch.timestamp);
+          // ★潮汐情報を補完するロジック（submitCatch と同じ）
+          if (newCatch.timestamp && typeof draft.lat === 'number' && typeof draft.lng === 'number') {
+            const dkey = dateKeyFromIso(newCatch.timestamp);
+            
+            try {
+              let dayChart = null;
+              // draft.tide_daily_cache にキャッシュがあるか確認
+              if (draft.tide_daily_cache?.[dkey]?.chart) {
+                dayChart = draft.tide_daily_cache[dkey].chart;
+                const info = tideInfoFromChart(dayChart, newCatch.timestamp);
                 newCatch.tide_level_cm = info.level_cm;
                 newCatch.tide_trend = info.trend_text;
-                // ★潮汐チャートから満潮・干潮時刻を計算
+                console.log('[EditModal] Tide from cache:', info);
+              } else {
+                // キャッシュになければ API から取得
+                const pack = await getTideChartForDate(draft.lat, draft.lng, newCatch.timestamp);
+                if (pack?.chart) {
+                  dayChart = pack.chart;
+                  draft.tide_daily_cache = draft.tide_daily_cache || {};
+                  draft.tide_daily_cache[dkey] = { harbor: pack.harbor || null, chart: pack.chart };
+                  const info = tideInfoFromChart(pack.chart, newCatch.timestamp);
+                  newCatch.tide_level_cm = info.level_cm;
+                  newCatch.tide_trend = info.trend_text;
+                  // ★潮汐チャートから満潮・干潮時刻を計算
+                  const hl = summarizeHighLowTimesFromChart(dayChart);
+                  newCatch.tide_high_times = hl.high;
+                  newCatch.tide_low_times = hl.low;
+                  console.log('[EditModal] Tide from API:', info, 'high/low:', hl);
+                }
+              }
+              
+              // ★キャッシュから取得した場合も満潮・干潮を計算
+              if (dayChart && !newCatch.tide_high_times && !newCatch.tide_low_times) {
                 const hl = summarizeHighLowTimesFromChart(dayChart);
                 newCatch.tide_high_times = hl.high;
                 newCatch.tide_low_times = hl.low;
-                console.log('[EditModal] Tide from API:', info, 'high/low:', hl);
               }
+              
+              // ★潮汐名と港名を設定
+              if (dayChart) {
+                newCatch.tide_name = dayChart?.moon?.title || draft.start_tide?.tideName || null;
+                if (draft.tide_daily_cache?.[dkey]?.harbor) {
+                  newCatch.tide_harbor_name = draft.tide_daily_cache[dkey].harbor.hn || null;
+                } else {
+                  newCatch.tide_harbor_name = draft.start_tide?.harbor?.hn || null;
+                }
+              }
+            } catch (ex) {
+              console.warn('[EditModal] Tide calculation failed:', ex?.message || ex);
             }
-            
-            // ★キャッシュから取得した場合も満潮・干潮を計算
-            if (dayChart && !newCatch.tide_high_times && !newCatch.tide_low_times) {
-              const hl = summarizeHighLowTimesFromChart(dayChart);
-              newCatch.tide_high_times = hl.high;
-              newCatch.tide_low_times = hl.low;
-            }
-            
-            // ★潮汐名と港名を設定
-            if (dayChart) {
-              newCatch.tide_name = dayChart?.moon?.title || draft.start_tide?.tideName || null;
-              if (draft.tide_daily_cache?.[dkey]?.harbor) {
-                newCatch.tide_harbor_name = draft.tide_daily_cache[dkey].harbor.hn || null;
+          }
+          
+          // ★天気情報を補完するロジック（submitCatch と同じ）
+          console.log('[EditModal] Weather check - draft.lat:', draft.lat, 'draft.lng:', draft.lng, 'type check:', typeof draft.lat === 'number' && typeof draft.lng === 'number');
+          if (typeof draft.lat === 'number' && typeof draft.lng === 'number') {
+            console.log('[EditModal] Entering weather fetch block, lat:', draft.lat, 'lng:', draft.lng);
+            try {
+              console.log('[EditModal] About to call fetchWeather...');
+              const wx = await fetchWeather(draft.lat, draft.lng);
+              console.log('[EditModal] fetchWeather returned:', wx);
+              if (wx) {
+                console.log('[EditModal] Weather object is truthy, assigning fields...');
+                newCatch.wx_temp = wx.temp ?? null;
+                console.log('[EditModal] Assigned wx_temp:', newCatch.wx_temp, '(from wx.temp:', wx.temp, ')');
+                newCatch.wx_wind_speed = wx.wind_speed ?? null;
+                console.log('[EditModal] Assigned wx_wind_speed:', newCatch.wx_wind_speed, '(from wx.wind_speed:', wx.wind_speed, ')');
+                newCatch.wx_wind_deg = wx.wind_deg ?? null;
+                console.log('[EditModal] Assigned wx_wind_deg:', newCatch.wx_wind_deg, '(from wx.wind_deg:', wx.wind_deg, ')');
+                newCatch.wx_main = wx.weather_main ?? null;
+                console.log('[EditModal] Assigned wx_main:', newCatch.wx_main, '(from wx.weather_main:', wx.weather_main, ')');
+                newCatch.wx_desc = wx.weather_description ?? null;
+                console.log('[EditModal] Assigned wx_desc:', newCatch.wx_desc, '(from wx.weather_description:', wx.weather_description, ')');
+                console.log('[EditModal] Weather fields assignment complete. newCatch weather fields:', {
+                  wx_temp: newCatch.wx_temp,
+                  wx_wind_speed: newCatch.wx_wind_speed,
+                  wx_wind_deg: newCatch.wx_wind_deg,
+                  wx_main: newCatch.wx_main,
+                  wx_desc: newCatch.wx_desc
+                });
               } else {
-                newCatch.tide_harbor_name = draft.start_tide?.harbor?.hn || null;
+                console.warn('[EditModal] fetchWeather returned falsy:', wx);
               }
+            } catch (ex) {
+              console.warn('[EditModal] Weather fetch failed:', ex?.message || ex);
             }
-          } catch (ex) {
-            console.warn('[EditModal] Tide calculation failed:', ex?.message || ex);
+          } else {
+            console.log('[EditModal] Skipping weather fetch - lat or lng not a number');
           }
-        }
-        
-        // ★天気情報を補完するロジック（submitCatch と同じ）
-        console.log('[EditModal] Weather check - draft.lat:', draft.lat, 'draft.lng:', draft.lng, 'type check:', typeof draft.lat === 'number' && typeof draft.lng === 'number');
-        if (typeof draft.lat === 'number' && typeof draft.lng === 'number') {
-          console.log('[EditModal] Entering weather fetch block, lat:', draft.lat, 'lng:', draft.lng);
-          try {
-            console.log('[EditModal] About to call fetchWeather...');
-            const wx = await fetchWeather(draft.lat, draft.lng);
-            console.log('[EditModal] fetchWeather returned:', wx);
-            if (wx) {
-              console.log('[EditModal] Weather object is truthy, assigning fields...');
-              newCatch.wx_temp = wx.temp ?? null;
-              console.log('[EditModal] Assigned wx_temp:', newCatch.wx_temp, '(from wx.temp:', wx.temp, ')');
-              newCatch.wx_wind_speed = wx.wind_speed ?? null;
-              console.log('[EditModal] Assigned wx_wind_speed:', newCatch.wx_wind_speed, '(from wx.wind_speed:', wx.wind_speed, ')');
-              newCatch.wx_wind_deg = wx.wind_deg ?? null;
-              console.log('[EditModal] Assigned wx_wind_deg:', newCatch.wx_wind_deg, '(from wx.wind_deg:', wx.wind_deg, ')');
-              newCatch.wx_main = wx.weather_main ?? null;
-              console.log('[EditModal] Assigned wx_main:', newCatch.wx_main, '(from wx.weather_main:', wx.weather_main, ')');
-              newCatch.wx_desc = wx.weather_description ?? null;
-              console.log('[EditModal] Assigned wx_desc:', newCatch.wx_desc, '(from wx.weather_description:', wx.weather_description, ')');
-              console.log('[EditModal] Weather fields assignment complete. newCatch weather fields:', {
-                wx_temp: newCatch.wx_temp,
-                wx_wind_speed: newCatch.wx_wind_speed,
-                wx_wind_deg: newCatch.wx_wind_deg,
-                wx_main: newCatch.wx_main,
-                wx_desc: newCatch.wx_desc
-              });
-            } else {
-              console.warn('[EditModal] fetchWeather returned falsy:', wx);
-            }
-          } catch (ex) {
-            console.warn('[EditModal] Weather fetch failed:', ex?.message || ex);
+          console.log('[EditModal] Before draft.catches.push, newCatch:', newCatch);
+          
+          // ★修正：前で既に定義した editFormSection, isEditing, editingIndex を使用
+          // (再定義しない)
+          
+          if (isEditing && editingIndex >= 0 && editingIndex < draft.catches.length) {
+            // ★編集モード：既存釣果を上書き
+            const existingCatch = draft.catches[editingIndex];
+            newCatch.id = existingCatch.id;  // IDは保持
+            draft.catches[editingIndex] = newCatch;
+            console.log('[EditModal] Catch updated at index:', editingIndex, newCatch);
+          } else {
+            // ★追加モード：新規釣果を追加
+            draft.catches.push(newCatch);
+            console.log('[EditModal] Catch added with tide completion:', newCatch);
           }
-        } else {
-          console.log('[EditModal] Skipping weather fetch - lat or lng not a number');
-        }
-        console.log('[EditModal] Before draft.catches.push, newCatch:', newCatch);
-        
-        // ★修正：前で既に定義した editFormSection, isEditing, editingIndex を使用
-        // (再定義しない)
-        
-        if (isEditing && editingIndex >= 0 && editingIndex < draft.catches.length) {
-          // ★編集モード：既存釣果を上書き
-          const existingCatch = draft.catches[editingIndex];
-          newCatch.id = existingCatch.id;  // IDは保持
-          draft.catches[editingIndex] = newCatch;
-          console.log('[EditModal] Catch updated at index:', editingIndex, newCatch);
-        } else {
-          // ★追加モード：新規釣果を追加
-          draft.catches.push(newCatch);
-          console.log('[EditModal] Catch added with tide completion:', newCatch);
-        }
-        
-        saveDraft(draft);
-        
-        // ★修正：編集フラグをリセット（次回作成を防ぐ）
-        const formSection = document.getElementById('editCatchFormSection');
-        if (formSection) {
-          formSection.dataset.isEditing = 'false';
-          formSection.dataset.editingIndex = '-1';
-        }
-        
-        // フォームをクリアして隠す
-        document.getElementById('editFormCatchTime').value = '';
-        document.getElementById('editFormCatchSpecies').value = '';
-        document.getElementById('editFormCatchSize').value = '';
-        document.getElementById('editFormCatchWeight').value = '';
-        document.getElementById('editFormCatchMethod').value = '';
-        document.getElementById('editFormCatchPhoto').value = '';
-        const photoPreview = document.getElementById('editFormCatchPhotoPreview');
-        if (photoPreview) {
-          photoPreview.classList.add('hidden');
-          photoPreview.src = '';
-        }
-        if (formSection) {
-          formSection.classList.add('hidden');
-        }
-        
-        // 釣果リストを再描画
-        const renderEditCatchListLocal = () => {
-          const cts = draft.catches || [];
-          const editCatchList = document.getElementById('editCatchList');
-          const editCatchCount = document.getElementById('editCatchCount');
-          editCatchList.innerHTML = '';
-          editCatchCount.textContent = cts.length;
+          
+          saveDraft(draft);
+          
+          // ★修正：編集フラグをリセット（次回作成を防ぐ）
+          const formSection = document.getElementById('editCatchFormSection');
+          if (formSection) {
+            formSection.dataset.isEditing = 'false';
+            formSection.dataset.editingIndex = '-1';
+          }
+          
+          // フォームをクリアして隠す
+          document.getElementById('editFormCatchTime').value = '';
+          document.getElementById('editFormCatchSpecies').value = '';
+          document.getElementById('editFormCatchSize').value = '';
+          document.getElementById('editFormCatchWeight').value = '';
+          document.getElementById('editFormCatchMethod').value = '';
+          document.getElementById('editFormCatchPhoto').value = '';
+          const photoPreview = document.getElementById('editFormCatchPhotoPreview');
+          if (photoPreview) {
+            photoPreview.classList.add('hidden');
+            photoPreview.src = '';
+          }
+          if (formSection) {
+            formSection.classList.add('hidden');
+          }
+          
+          // 釣果リストを再描画
+          const renderEditCatchListLocal = () => {
+            const cts = draft.catches || [];
+            const editCatchList = document.getElementById('editCatchList');
+            const editCatchCount = document.getElementById('editCatchCount');
+            editCatchList.innerHTML = '';
+            editCatchCount.textContent = cts.length;
 
-          cts.forEach((c, i) => {
-            // ★修正：既に正規化されたオブジェクト形式なので直接使用
-            const catchObjTemp = c;
+            cts.forEach((c, i) => {
+              // ★修正：既に正規化されたオブジェクト形式なので直接使用
+              const catchObjTemp = c;
 
-            const itemTemp = document.createElement('div');
-            itemTemp.className = 'bg-slate-800 rounded-lg p-3 flex items-start justify-between';
+              const itemTemp = document.createElement('div');
+              itemTemp.className = 'bg-slate-800 rounded-lg p-3 flex items-start justify-between';
 
-            const contentTemp = document.createElement('div');
-            contentTemp.className = 'flex-1 cursor-pointer hover:bg-slate-700/30 rounded p-1 transition';
-            
-            let timeStrTemp = '';
-            if (catchObjTemp.timestamp) {
-              const d = new Date(catchObjTemp.timestamp);
-              timeStrTemp = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-            }
-            
-            const tideInfoTemp = [];
-            if (catchObjTemp.tide_trend) tideInfoTemp.push(catchObjTemp.tide_trend);
-            if (catchObjTemp.tide_level_cm != null) tideInfoTemp.push(catchObjTemp.tide_level_cm + ' cm');
-            const tideStrTemp = tideInfoTemp.length > 0 ? tideInfoTemp.join(' ') : '';
-            
-            contentTemp.innerHTML = `
-              <div class="font-semibold text-slate-100 text-sm">${catchObjTemp.species || '(魚種未設定)'} ${catchObjTemp.size_cm ? catchObjTemp.size_cm + ' cm' : ''}</div>
-              <div class="text-slate-400 text-xs mt-1">${timeStrTemp}</div>
-              ${tideStrTemp ? `<div class="text-slate-300 text-xs mt-1">${tideStrTemp}</div>` : ''}
-            `;
-
-            // ★追加：編集ボタン
-            const btnEditTemp = document.createElement('button');
-            btnEditTemp.className = 'text-xs py-1 px-2 rounded bg-blue-900 hover:bg-blue-800 text-blue-200 ml-2';
-            btnEditTemp.textContent = '編集';
-            btnEditTemp.onclick = (e) => {
-              e.stopPropagation();
-              // 編集フォームにデータを展開
-              const editFormSection = document.getElementById('editCatchFormSection');
-              const editFormTime = document.getElementById('editFormCatchTime');
-              const editFormSpecies = document.getElementById('editFormCatchSpecies');
-              const editFormSize = document.getElementById('editFormCatchSize');
-              const editFormWeight = document.getElementById('editFormCatchWeight');
-              const editFormMethod = document.getElementById('editFormCatchMethod');
+              const contentTemp = document.createElement('div');
+              contentTemp.className = 'flex-1 cursor-pointer hover:bg-slate-700/30 rounded p-1 transition';
               
-              // ★追加：編集中のインデックスを保存（更新時に使用）
-              editFormSection.dataset.editingIndex = i;
-              editFormSection.dataset.isEditing = 'true';
-              
-              // 既存データを展開
+              let timeStrTemp = '';
               if (catchObjTemp.timestamp) {
-                // ★修正：toLocalInputValue 関数を使用（ローカルタイムゾーン対応）
-                try {
-                  const dt = new Date(catchObjTemp.timestamp);
-                  editFormTime.value = toLocalInputValue(dt);
-                  console.log('[TripEdit] timestamp converted:', {
-                    original: catchObjTemp.timestamp,
-                    formatted: editFormTime.value
-                  });
-                } catch (e) {
-                  console.warn('[TripEdit] timestamp parse failed:', e);
+                const d = new Date(catchObjTemp.timestamp);
+                timeStrTemp = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+              }
+              
+              const tideInfoTemp = [];
+              if (catchObjTemp.tide_trend) tideInfoTemp.push(catchObjTemp.tide_trend);
+              if (catchObjTemp.tide_level_cm != null) tideInfoTemp.push(catchObjTemp.tide_level_cm + ' cm');
+              const tideStrTemp = tideInfoTemp.length > 0 ? tideInfoTemp.join(' ') : '';
+              
+              contentTemp.innerHTML = `
+                <div class="font-semibold text-slate-100 text-sm">${catchObjTemp.species || '(魚種未設定)'} ${catchObjTemp.size_cm ? catchObjTemp.size_cm + ' cm' : ''}</div>
+                <div class="text-slate-400 text-xs mt-1">${timeStrTemp}</div>
+                ${tideStrTemp ? `<div class="text-slate-300 text-xs mt-1">${tideStrTemp}</div>` : ''}
+              `;
+
+              // ★追加：編集ボタン
+              const btnEditTemp = document.createElement('button');
+              btnEditTemp.className = 'text-xs py-1 px-2 rounded bg-blue-900 hover:bg-blue-800 text-blue-200 ml-2';
+              btnEditTemp.textContent = '編集';
+              btnEditTemp.onclick = (e) => {
+                e.stopPropagation();
+                // 編集フォームにデータを展開
+                const editFormSection = document.getElementById('editCatchFormSection');
+                const editFormTime = document.getElementById('editFormCatchTime');
+                const editFormSpecies = document.getElementById('editFormCatchSpecies');
+                const editFormSize = document.getElementById('editFormCatchSize');
+                const editFormWeight = document.getElementById('editFormCatchWeight');
+                const editFormMethod = document.getElementById('editFormCatchMethod');
+                
+                // ★追加：編集中のインデックスを保存（更新時に使用）
+                editFormSection.dataset.editingIndex = i;
+                editFormSection.dataset.isEditing = 'true';
+                
+                // 既存データを展開
+                if (catchObjTemp.timestamp) {
+                  // ★修正：toLocalInputValue 関数を使用（ローカルタイムゾーン対応）
+                  try {
+                    const dt = new Date(catchObjTemp.timestamp);
+                    editFormTime.value = toLocalInputValue(dt);
+                    console.log('[TripEdit] timestamp converted:', {
+                      original: catchObjTemp.timestamp,
+                      formatted: editFormTime.value
+                    });
+                  } catch (e) {
+                    console.warn('[TripEdit] timestamp parse failed:', e);
+                    editFormTime.value = '';
+                  }
+                } else {
                   editFormTime.value = '';
                 }
-              } else {
-                editFormTime.value = '';
-              }
-              editFormSpecies.value = catchObjTemp.species || '';
-              editFormSize.value = catchObjTemp.size_cm ? String(catchObjTemp.size_cm) : '';
-              editFormWeight.value = catchObjTemp.weight_g ? String(catchObjTemp.weight_g) : '';
-              editFormMethod.value = catchObjTemp.method || '';
-              
+                editFormSpecies.value = catchObjTemp.species || '';
+                editFormSize.value = catchObjTemp.size_cm ? String(catchObjTemp.size_cm) : '';
+                editFormWeight.value = catchObjTemp.weight_g ? String(catchObjTemp.weight_g) : '';
+                editFormMethod.value = catchObjTemp.method || '';
+                
                 // ★追加：写真フィールドを表示（編集時でも写真変更可能に）
                 const photoLabel = document.querySelector('label:has(#editFormCatchPhoto)');
                 if (photoLabel) photoLabel.classList.remove('hidden');
                 
                 // フォームセクションを表示
                 editFormSection.classList.remove('hidden');
-              // 保存ボタンのテキストを変更
-              document.getElementById('btnSaveCatchFormInEdit').textContent = '更新';
-              
-              // フォームにスクロール
-              editFormSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              
-              console.log('[TripEdit] Editing catch at index:', i, 'data:', catchObjTemp);
-            };
+                // 保存ボタンのテキストを変更
+                document.getElementById('btnSaveCatchFormInEdit').textContent = '更新';
+                
+                // フォームにスクロール
+                editFormSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                console.log('[TripEdit] Editing catch at index:', i, 'data:', catchObjTemp);
+              };
 
-            const btnDeleteTemp = document.createElement('button');
-            btnDeleteTemp.className = 'text-xs py-1 px-2 rounded bg-red-900 hover:bg-red-800 text-red-200 ml-2';
-            btnDeleteTemp.textContent = '削除';
-            btnDeleteTemp.onclick = (e) => {
-              e.stopPropagation();
-              if (confirm('この釣果を削除しますか？')) {
-                draft.catches.splice(i, 1);
-                saveDraft(draft);
-                renderEditCatchListLocal();
-              }
-            };
+              const btnDeleteTemp = document.createElement('button');
+              btnDeleteTemp.className = 'text-xs py-1 px-2 rounded bg-red-900 hover:bg-red-800 text-red-200 ml-2';
+              btnDeleteTemp.textContent = '削除';
+              btnDeleteTemp.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm('この釣果を削除しますか？')) {
+                  draft.catches.splice(i, 1);
+                  saveDraft(draft);
+                  renderEditCatchListLocal();
+                }
+              };
 
-            itemTemp.appendChild(contentTemp);
-            itemTemp.appendChild(btnEditTemp);
-            itemTemp.appendChild(btnDeleteTemp);
-            editCatchList.appendChild(itemTemp);
-          });
-        };
-        renderEditCatchListLocal();
+              itemTemp.appendChild(contentTemp);
+              itemTemp.appendChild(btnEditTemp);
+              itemTemp.appendChild(btnDeleteTemp);
+              editCatchList.appendChild(itemTemp);
+            });
+          };
+          renderEditCatchListLocal();
+        } catch (err) {
+          console.error('[EditModal] Catch save failed:', err);
+          alert('釣果の保存に失敗しました: ' + (err?.message || err));
+        } finally {
+          hideUploadingOverlay();
+        }
       };
     }
     if (btnSaveTripEdit) {
@@ -7333,15 +7556,21 @@
           console.log('[btnSaveTripEdit] submitTripEditData completed');
         } catch (e) {
           console.error('[btnSaveTripEdit] error:', e);
-          hideUploadingOverlay();
           // ★修正：汎用関数を使用してボタンを有効化
           setTripEditModalElementsEnabled(true);
+        } finally {
+          // ★修正：成功時・エラー時の両方で isUploading をリセット
+          isUploading = false;
+          console.log('[btnSaveTripEdit] finally: isUploading reset to false');
         }
       };
     }
 
     // ★追加：釣行編集データを上書き保存
     async function submitTripEditData() {
+      // ★修正：CONFIG初期化完了を待機（API呼び出し前の必須処理）
+      await configInitPromise;
+      
       // ★追加：Harbor キャッシュを事前ロード（編集時の非同期遅延防止）
       try {
         await ensureHarborCache();
@@ -7350,7 +7579,49 @@
         // 警告のみ、処理は続行
       }
       
-      // ★追加：保存時に Trips シートから全データを再度取得して draft に反映（未編集データの喪失を防ぐ）
+      // ★修正：フォーム値を先に取得（優先度の高い順：入力値 > Trips シート値）
+      const editTripStarted = document.getElementById('editTripStarted');
+      const editTripEnded = document.getElementById('editTripEnded');
+      const editTripLat = document.getElementById('editTripLat');
+      const editTripLng = document.getElementById('editTripLng');
+      const editTripMemo = document.getElementById('editTripMemo');
+      
+      // ★修正：新しい日時・位置情報を一時保存（再取得に使用）
+      let formStartedAt = null;
+      let formEndedAt = null;
+      let formLat = null;
+      let formLng = null;
+      
+      // フォーム値から新しい日時を取得
+      if (editTripStarted && editTripStarted.value) {
+        const parsed = parseDisplayDatetime(editTripStarted.value.trim());
+        if (parsed) {
+          formStartedAt = toOffsetIsoLocal(parsed);
+        } else {
+          console.warn('[submitTripEditData] Invalid startedAt format:', editTripStarted.value);
+        }
+      }
+      
+      if (editTripEnded && editTripEnded.value) {
+        const parsed = parseDisplayDatetime(editTripEnded.value.trim());
+        if (parsed) {
+          formEndedAt = toOffsetIsoLocal(parsed);
+        } else {
+          console.warn('[submitTripEditData] Invalid endedAt format:', editTripEnded.value);
+        }
+      }
+      
+      // フォーム値から新しい位置情報を取得
+      if (editTripLat && editTripLat.value) {
+        const lat = parseFloat(editTripLat.value);
+        if (isFinite(lat)) formLat = lat;
+      }
+      if (editTripLng && editTripLng.value) {
+        const lng = parseFloat(editTripLng.value);
+        if (isFinite(lng)) formLng = lng;
+      }
+      
+      // ★修正：保存時に Trips シートから全データを再度取得して draft に反映（未編集データの喪失を防ぐ）
       try {
         const headers = tripsCache[0];
         const col = {};
@@ -7360,17 +7631,37 @@
         const tripRow = tripsCache.find((t, idx) => idx > 0 && String(t[col.tripId]) === String(draft.tripId));
         
         if (tripRow) {
-          // ★追加：日時データを復元（Trips シートから）
-          if (tripRow[col.startedAt]) {
-            draft.startedAt = tripRow[col.startedAt];
-          }
-          if (tripRow[col.endedAt]) {
-            draft.endedAt = tripRow[col.endedAt];
+          // ★修正：Trips シートから復元（フォーム値がない場合のみ）
+          if (!formStartedAt && tripRow[col.startedAt]) {
+            try {
+              const dt = new Date(tripRow[col.startedAt]);
+              if (!isNaN(dt.getTime())) {
+                formStartedAt = tripRow[col.startedAt];
+              }
+            } catch (e) {
+              console.warn('[submitTripEditData] Invalid startedAt in sheet');
+            }
           }
           
-          // ★追加：位置情報を復元
-          if (tripRow[col.lat]) draft.lat = parseFloat(tripRow[col.lat]) || draft.lat;
-          if (tripRow[col.lng]) draft.lng = parseFloat(tripRow[col.lng]) || draft.lng;
+          if (!formEndedAt && tripRow[col.endedAt]) {
+            try {
+              const dt = new Date(tripRow[col.endedAt]);
+              if (!isNaN(dt.getTime())) {
+                formEndedAt = tripRow[col.endedAt];
+              }
+            } catch (e) {
+              console.warn('[submitTripEditData] Invalid endedAt in sheet');
+            }
+          }
+          
+          if (!isFinite(formLat) && tripRow[col.lat]) {
+            const lat = parseFloat(tripRow[col.lat]);
+            if (isFinite(lat)) formLat = lat;
+          }
+          if (!isFinite(formLng) && tripRow[col.lng]) {
+            const lng = parseFloat(tripRow[col.lng]);
+            if (isFinite(lng)) formLng = lng;
+          }
           
           // 元データから全カラムを draft に反映
           draft.status = tripRow[col.status] || draft.status || 'ended';
@@ -7425,7 +7716,9 @@
           draft.weather = tripRow[col.start_weather_main] || draft.weather || null;
           draft.tide_trend = tripRow[col.tide_trend] || draft.tide_trend || null;
           draft.tide_level_cm = tripRow[col.tide_level_cm] ? parseFloat(tripRow[col.tide_level_cm]) : (draft.tide_level_cm || null);
-          draft.memo = tripRow[col.memo] || draft.memo || null;
+          if (!editTripMemo || !editTripMemo.value) {
+            draft.memo = tripRow[col.memo] || draft.memo || null;
+          }
           
           // moon データを引き継ぐ
           if (tripRow[col.moon_v]) draft.moon_v = tripRow[col.moon_v];
@@ -7437,78 +7730,54 @@
         console.error('[TripEdit] Error restoring full trip data:', e);
       }
       
-      // 入力値から釣行データを更新（入力があった場合のみ更新）
-      if (editTripStarted.value) {
-        try {
-          const dt = new Date(editTripStarted.value.replace(' ', 'T'));
-          draft.startedAt = toOffsetIsoLocal(dt);
-        } catch (e) {
-          alert('開始日時の形式が正しくありません');
-          return;
-        }
+      // ★修正：フォーム値を draft に反映（優先度：フォーム入力値 > Trips シート値）
+      if (formStartedAt) {
+        draft.startedAt = formStartedAt;
       }
-      // ★修正：editTripStarted が空の場合、Trips シートから復元した値を保持（上書きしない）
-
-      if (editTripEnded.value) {
-        try {
-          const dt = new Date(editTripEnded.value.replace(' ', 'T'));
-          draft.endedAt = toOffsetIsoLocal(dt);
-        } catch (e) {
-          alert('終了日時の形式が正しくありません');
-          return;
-        }
+      if (formEndedAt) {
+        draft.endedAt = formEndedAt;
       }
-      // ★修正：editTripEnded が空の場合、Trips シートから復元した値を保持（上書きしない）
-
-      let lat = parseFloat(editTripLat.value);
-      let lng = parseFloat(editTripLng.value);
-      if (isFinite(lat) && isFinite(lng)) {
-        draft.lat = lat;
-        draft.lng = lng;
+      if (isFinite(formLat)) {
+        draft.lat = formLat;
       }
-      // ★修正：lat/lng が有効でない場合、Trips シートから復元した値を保持
-
-      // ★追加：メモを draft に反映
-      const editTripMemo = document.getElementById('editTripMemo');
-      if (editTripMemo) {
+      if (isFinite(formLng)) {
+        draft.lng = formLng;
+      }
+      
+      // ★修正：メモをフォーム値で更新
+      if (editTripMemo && editTripMemo.value) {
         draft.memo = editTripMemo.value || null;
       }
 
-      // ★修正：常に補完データを再取得（位置情報の有無に関わらず）
-      const hasPosition = isFinite(lat) && isFinite(lng);
-      if (!hasPosition && isFinite(parseFloat(draft.lat)) && isFinite(parseFloat(draft.lng))) {
-        lat = parseFloat(draft.lat);
-        lng = parseFloat(draft.lng);
-      }
-
-      // 有効な位置情報がある場合は補完データを再取得
-      if (isFinite(lat) && isFinite(lng)) {
+      // ★修正：有効な位置情報がある場合は補完データを再取得（最新の日時・位置を使用）
+      const hasValidPosition = isFinite(draft.lat) && isFinite(draft.lng);
+      if (hasValidPosition) {
         // ★修正：水温を保持してからリセット
         const preservedWaterTemp = draft.start_water_temp;
         
         // 補完データをリセット
         draft.start_weather = null;
         draft.start_tide = null;
-        draft.start_water_temp = null;
         draft.tide_daily_cache = {};
         
         try {
           // 天気を再取得（開始時刻がある場合はその日付で）
           try {
             const weatherTargetDate = draft.startedAt ? new Date(draft.startedAt) : null;
-            draft.start_weather = await fetchWeather(lat, lng, weatherTargetDate);
+            draft.start_weather = await fetchWeather(draft.lat, draft.lng, weatherTargetDate);
           } catch (weatherErr) {
+            LOG.app('[submitTripEditData] Weather fetch error:', weatherErr?.message);
             draft.start_weather = null;
           }
           
-          // ★修正：潮汐を再取得（開始時刻がある場合）- Harbor キャッシュ確保後に実行
+          // ★修正：潮汐を再取得（開始時刻がある場合）- 最新の日時・位置を使用
           if (draft.startedAt) {
             try {
               // Harbor キャッシュが確保されたことを確認
               if (harborCache && harborCache.mapped && harborCache.mapped.length > 0) {
                 LOG.tide('[submitTripEditData] Harbor cache confirmed before fetchTideForStart');
               }
-              const tide = await fetchTideForStart(lat, lng, draft.startedAt);
+              const tide = await fetchTideForStart(draft.lat, draft.lng, draft.startedAt);
               draft.start_tide = tide || null;
               if (tide?.chart && tide?.chartDateKey) {
                 draft.tide_daily_cache = draft.tide_daily_cache || {};
@@ -7527,6 +7796,7 @@
           // ★修正：水温は再取得せず、保持した値を復元
           draft.start_water_temp = preservedWaterTemp;
         } catch (e) {
+          LOG.app('[submitTripEditData] Data refetch error:', e?.message || e);
           // Refetch error - continue with whatever data is available
         }
       }
@@ -7548,18 +7818,16 @@
         draft = { tripId: uuid(), status: 'idle', catches: [], tide_daily_cache: {}, start_water_temp: null, memo: null };
         saveDraft(draft);
         
-        // ★修正：モーダルを完全に閉じた後にオーバーレイを隠す
-        hideUploadingOverlay();
-        
         // ★修正：成功時もボタンを再有効化（汎用関数を使用）
         setTripEditModalElementsEnabled(true);
       } catch (e) {
-        // ★修正：エラー時もオーバーレイを隠す
-        hideUploadingOverlay();
         alert('アップロードに失敗しました: ' + (e?.message || e));
         
         // ★修正：エラー時もボタンを再度有効化（汎用関数を使用）
         setTripEditModalElementsEnabled(true);
+      } finally {
+        // ★修正：成功時・エラー時の両方でオーバーレイを解除
+        hideUploadingOverlay();
       }
     }
 
@@ -7618,7 +7886,7 @@
       const btnAddManualCatch = document.getElementById('homeAddManualCatch');
       
       if (btnManualTrip) {
-        btnManualTrip.onclick = openManualTripForm;
+        btnManualTrip.onclick = () => openManualTripForm();
       }
       if (btnAddManualCatch) {
         btnAddManualCatch.onclick = openManualCatchForm;
