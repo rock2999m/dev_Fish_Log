@@ -29,7 +29,7 @@
   <header class="sticky top-0 z-10 backdrop-blur bg-slate-950/70 border-b border-slate-800">
     <div class="max-w-4xl mx-auto px-4 py-3">
       <div class="mb-3 text-center">
-        <h1 class="text-3xl font-bold">Fishing_Log v1.1</h1>
+        <h1 class="text-3xl font-bold">Fishing_Log v1.2</h1>
       </div>
       <nav class="flex gap-2 text-sm items-center justify-between">
         <div class="flex gap-2">
@@ -327,7 +327,7 @@
         </div>
       </section>
 
-    <!-- 釣行の記録 -->
+      <!-- 釣行の記録 -->
     <section id="recordView" class="hidden">
       <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col gap-2 mb-4">
         <div class="flex items-center justify-between">
@@ -376,108 +376,126 @@
         </div>
       </div>
 
-      <!-- 釣果モーダル -->
-      <div id="catchModal" class="hidden fixed inset-0 z-20 bg-black/60 grid place-items-center p-4">
-        <div class="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
-          <div class="flex items-center justify-between mb-2">
-            <h3 id="modalTitle" class="font-semibold">釣果を追加</h3>
-            <button id="btnCloseModal" class="text-slate-400 hover:text-slate-200">×</button>
-          </div>
-          <div class="space-y-3">
-            <label class="block"><span class="text-sm text-slate-300">時刻</span>
-              <input id="inpCatchTime" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-            </label>
-            <label class="block"><span class="text-sm text-slate-300">魚種</span>
-              <input id="inpSpecies" type="text" placeholder="例：アジ" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-            </label>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="block"><span class="text-sm text-slate-300">サイズ(cm)</span>
-                <input id="inpSize" type="number" inputmode="decimal" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-              </label>
-              <label class="block"><span class="text-sm text-slate-300">重量(g)</span>
-                <input id="inpWeight" type="number" inputmode="decimal" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-              </label>
-            </div>
-            <label class="block"><span class="text-sm text-slate-300">方法（ルアー/リグ 等）</span>
-              <input id="inpMethod" type="text" placeholder="例：メタルジグ 20g" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-            </label>
-            <label class="block"><span class="text-sm text-slate-300">写真</span>
-              <input id="inpPhoto" type="file" accept="image/*" class="mt-1 w-full text-sm" />
-              <img id="imgPreview" alt="preview" class="hidden mt-2 h-32 w-full object-cover rounded-xl border border-slate-800" />
-            </label>
-          </div>
-          <div class="flex gap-2 mt-4">
-            <button id="btnCancelCatch" class="flex-1 py-2 rounded-xl border border-slate-700 hover:bg-slate-800">キャンセル</button>
-            <button id="btnSaveCatch" class="flex-1 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 font-semibold">保存</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ★追加: 手動釣行登録モーダル -->
-      <div id="tripModal" class="hidden fixed inset-0 z-20 bg-black/60 grid place-items-center p-4">
-        <div class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold">手動で釣行を登録</h3>
-            <button id="btnCloseTripModal" class="text-slate-400 hover:text-slate-200">×</button>
-          </div>
-          <div class="space-y-3">
-            <label class="block"><span class="text-sm text-slate-300">開始日時（空ならEXIFから補完）</span>
-              <input id="inpTripStart" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-            </label>
-            <label class="block"><span class="text-sm text-slate-300">終了日時（未入力の場合、終了時に再確認）</span>
-              <input id="inpTripEnd" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-            </label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="block">
-                <span class="text-sm text-slate-300">緯度（任意）</span>
-                <input id="inpTripLat" type="number" step="any" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-              </label>
-              <label class="block">
-                <span class="text-sm text-slate-300">経度（任意）</span>
-                <input id="inpTripLng" type="number" step="any" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
-              </label>
-            </div>
-            <p class="text-xs text-slate-400">※ 緯度・経度があると、開始天気・開始潮汐・水温を自動取得します。</p>
-          </div>
-          <div class="flex gap-2 mt-4">
-            <button id="btnCancelTripModal" class="flex-1 py-2 rounded-2xl bg-slate-700 hover:bg-slate-600 font-semibold">キャンセル</button>
-            <button id="btnSaveTrip" class="flex-1 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-semibold">登録</button>
-          </div>
-        </div>
-      </div>
-
-
-      <!-- 釣行アップロード確認モーダル -->
-      <div id="uploadReviewModal" class="hidden fixed inset-0 z-30 bg-black/60 grid place-items-center p-4">
-        <div class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold">アップロードの確認</h3>
-            <button id="btnCloseUploadReview" class="text-slate-400 hover:text-slate-200">×</button>
-          </div>
-          <div id="uploadReviewBody" class="text-sm text-slate-200 space-y-2 max-h-[45vh] overflow-auto"></div>
-          
-          <!-- ★追加：メモ入力欄 -->
-          <div class="mt-4 pt-4 border-t border-slate-800">
-            <label class="block">
-              <span class="text-sm text-slate-300 mb-2 block">メモ（オプション）</span>
-              <textarea id="tripMemoInput" 
-                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-600"
-                placeholder="この釣行についてのメモを入力してください..."
-                rows="3"></textarea>
-            </label>
-          </div>
-          
-          <div class="flex gap-2 mt-4">
-            <button id="btnCancelUpload" class="flex-1 py-2 rounded-xl border border-slate-700 hover:bg-slate-800">釣行を続ける</button>
-            <button id="btnConfirmUpload" class="flex-1 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 font-semibold">アップロード</button>
-          </div>
-        </div>
-      </div>
-
     </section>
   </main>
 
   <!-- ★修正：オーバーレイを main の外に移動（z-index が効くようにするため） -->
+  <div id="catchModal" class="hidden fixed inset-0 z-20 bg-black/60 grid place-items-center p-4">
+    <div class="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-2">
+        <h3 id="modalTitle" class="font-semibold">釣果を追加</h3>
+        <button id="btnCloseModal" class="text-slate-400 hover:text-slate-200">×</button>
+      </div>
+      <div class="space-y-3">
+        <label class="block"><span class="text-sm text-slate-300">時刻</span>
+          <input id="inpCatchTime" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+        </label>
+        <label class="block"><span class="text-sm text-slate-300">魚種</span>
+          <input id="inpSpecies" type="text" placeholder="例：アジ" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+        </label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block"><span class="text-sm text-slate-300">サイズ(cm)</span>
+            <input id="inpSize" type="number" inputmode="decimal" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+          </label>
+          <label class="block"><span class="text-sm text-slate-300">重量(g)</span>
+            <input id="inpWeight" type="number" inputmode="decimal" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+          </label>
+        </div>
+        <label class="block"><span class="text-sm text-slate-300">方法（ルアー/リグ 等）</span>
+          <input id="inpMethod" type="text" placeholder="例：メタルジグ 20g" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+        </label>
+        <div id="photoFieldWrapper" class="block">
+          <label class="block"><span class="text-sm text-slate-300">写真</span>
+            <input id="inpPhoto" type="file" accept="image/*" class="mt-1 w-full text-sm" />
+          </label>
+          <img id="imgPreview" alt="preview" class="hidden mt-2 h-32 w-full object-cover rounded-xl border border-slate-800" />
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button id="btnCancelCatch" class="flex-1 py-2 rounded-xl border border-slate-700 hover:bg-slate-800">キャンセル</button>
+        <button id="btnSaveCatch" class="flex-1 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 font-semibold">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="photoUploadModal" class="hidden fixed inset-0 z-30 bg-black/60 grid place-items-center p-4">
+    <div class="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold">写真をアップロード</h3>
+        <button id="btnClosePhotoUpload" class="text-slate-400 hover:text-slate-200" type="button">×</button>
+      </div>
+      <p class="text-sm text-slate-300 mb-3">手動釣行では写真から時刻・位置を補完します。先に写真を選択してアップロードしてください。</p>
+      <div class="space-y-3">
+        <label class="block"><span class="text-sm text-slate-300">写真（JPEG推奨）</span>
+          <input id="manualPhotoInput" type="file" accept="image/*" class="mt-1 w-full text-sm bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+        </label>
+        <div id="manualPhotoPreview" class="hidden">
+          <div class="text-xs text-slate-400 mb-1">選択中の写真プレビュー</div>
+          <img id="manualPhotoPreviewImg" alt="photo preview" class="mt-1 h-32 w-full rounded-xl object-cover border border-slate-800" />
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button id="btnCancelManualPhoto" class="flex-1 py-2 rounded-xl border border-slate-700 hover:bg-slate-800" type="button">戻る</button>
+        <button id="btnUploadManualPhoto" class="flex-1 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-semibold" type="button">アップロードして補完</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tripModal" class="hidden fixed inset-0 z-20 bg-black/60 grid place-items-center p-4">
+    <div class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold">手動で釣行を登録</h3>
+        <button id="btnCloseTripModal" class="text-slate-400 hover:text-slate-200">×</button>
+      </div>
+      <div class="space-y-3">
+        <label class="block"><span class="text-sm text-slate-300">開始日時（空ならEXIFから補完）</span>
+          <input id="inpTripStart" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+        </label>
+        <label class="block"><span class="text-sm text-slate-300">終了日時（未入力の場合、終了時に再確認）</span>
+          <input id="inpTripEnd" type="text" placeholder="yyyy/mm/dd hh:mm" maxlength="16" inputmode="numeric" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+        </label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="text-sm text-slate-300">緯度（任意）</span>
+            <input id="inpTripLat" type="number" step="any" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-slate-300">経度（任意）</span>
+            <input id="inpTripLng" type="number" step="any" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
+          </label>
+        </div>
+        <p class="text-xs text-slate-400">※ 緯度・経度があると、開始天気・開始潮汐・水温を自動取得します。</p>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button id="btnCancelTripModal" class="flex-1 py-2 rounded-2xl bg-slate-700 hover:bg-slate-600 font-semibold">キャンセル</button>
+        <button id="btnSaveTrip" class="flex-1 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-semibold">登録</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="uploadReviewModal" class="hidden fixed inset-0 z-30 bg-black/60 grid place-items-center p-4">
+    <div class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold">アップロードの確認</h3>
+        <button id="btnCloseUploadReview" class="text-slate-400 hover:text-slate-200">×</button>
+      </div>
+      <div id="uploadReviewBody" class="text-sm text-slate-200 space-y-2 max-h-[45vh] overflow-auto"></div>
+      <div class="mt-4 pt-4 border-t border-slate-800">
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-2 block">メモ（オプション）</span>
+          <textarea id="tripMemoInput" 
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-600"
+            placeholder="この釣行についてのメモを入力してください..."
+            rows="3"></textarea>
+        </label>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button id="btnCancelUpload" class="flex-1 py-2 rounded-xl border border-slate-700 hover:bg-slate-800">釣行を続ける</button>
+        <button id="btnConfirmUpload" class="flex-1 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 font-semibold">アップロード</button>
+      </div>
+    </div>
+  </div>
+
   <div id="uploadingOverlay" class="hidden fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center" style="pointer-events: auto;">
     <div class="text-center pointer-events-none">
       <div class="mb-4">
@@ -863,6 +881,66 @@
     const tripsView = document.getElementById('tripsView');          // ★追加
     const catchesView = document.getElementById('catchesView');
     const settingsView = document.getElementById('settingsView');    // ★追加
+    let manualCatchSuppressRecordView = false;
+    let uploadReviewDraftBackup = null;
+    let uploadReviewPendingEndBackup = null;
+
+    function captureUploadReviewBackup(){
+      try {
+        uploadReviewDraftBackup = JSON.parse(JSON.stringify(draft));
+      } catch (err) {
+        uploadReviewDraftBackup = { ...draft };
+      }
+      uploadReviewPendingEndBackup = pendingEnd ? { ...pendingEnd } : null;
+    }
+
+    function clearUploadReviewBackup(){
+      uploadReviewDraftBackup = null;
+      uploadReviewPendingEndBackup = null;
+    }
+    
+    let editCatchColumnMap = null;
+
+    function buildEditCatchColumnMap() {
+      const headers = (catchesCache || [])[0] || [];
+      const map = {};
+      for (let i = 0; i < headers.length; i++) {
+        const key = String(headers[i] || '').trim();
+        if (key) map[key] = i;
+      }
+      return map;
+    }
+
+    function getCatchFieldValue(raw, key, colMap) {
+      if (!raw) return null;
+      if (Array.isArray(raw)) {
+        const idx = colMap?.[key];
+        if (typeof idx === 'number' && idx >= 0) {
+          return raw[idx];
+        }
+        return null;
+      }
+      return raw[key] ?? null;
+    }
+
+    function normalizeEditCatchEntry(raw, colMapOverride) {
+      const schemaMap = colMapOverride || editCatchColumnMap || buildEditCatchColumnMap();
+      const getValue = (key) => getCatchFieldValue(raw, key, schemaMap);
+      const normalizeNumber = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        return Number(value);
+      };
+      const base = {
+        id: getValue('catchId') || getValue('id') || null,
+        species: String(getValue('species') || '').trim(),
+        size_cm: normalizeNumber(getValue('size_cm')),
+        weight_g: normalizeNumber(getValue('weight_g')),
+        method: String(getValue('method') || '').trim(),
+        timestamp: getValue('timestamp') || ''
+      };
+      const rawObject = (!Array.isArray(raw) && raw) ? { ...raw } : {};
+      return { ...rawObject, ...base };
+    }
     document.getElementById('homeGoRecord').onclick = () => { showView('record'); };
     document.getElementById('homeGoTrips').onclick = () => { showView('trips'); autoLoadTrips(); };   // ★追加
     document.getElementById('homeGoCatches').onclick = () => { showView('catches'); autoLoadCatches(); };
@@ -872,10 +950,15 @@
     navCatches.onclick = () => { showView('catches'); autoLoadCatches(); };
     document.getElementById('navSettings').onclick = () => { showView('settings'); };
 
-    // ★追加：ホームの「手動で釣果追加」ボタン（id="homeAddManualCatch"）に紐付け
-    const btnAddManualFromHome = document.getElementById('homeAddManualCatch');
-    btnAddManualFromHome && (btnAddManualFromHome.onclick = openManualCatch);
     function showView(name){
+      const isRecordOrTrips = (name === 'record' || name === 'trips');
+      if (isRecordOrTrips) {
+        console.log('[showView] request', name, 'manualCatchSuppressRecordView=', manualCatchSuppressRecordView, '\nstack:', new Error().stack);
+      }
+      if (manualCatchSuppressRecordView && isRecordOrTrips) {
+        console.log('[showView] suppressed navigation to', name, 'manualCatchSuppressRecordView still true');
+        return;
+      }
       homeView.classList.toggle('hidden', name !== 'home');
       recordView.classList.toggle('hidden', name !== 'record');
       tripsView.classList.toggle('hidden', name !== 'trips');    // ★追加
@@ -2331,6 +2414,7 @@
     let catchForm = { id: uuid(), timestamp: nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined };
     let editMode=false, editingId=null;
     let manualCatchMode = false;
+    let manualCatchPhotoMetadata = null;
 
     // 終了確認モーダル用
     let pendingEnd = null; // { endedAt: string(JST ISO), end_weather: object|null }
@@ -2364,6 +2448,14 @@
     const inpMethod=document.getElementById('inpMethod');
     const inpPhoto=document.getElementById('inpPhoto');
     const imgPreview=document.getElementById('imgPreview');
+    const photoFieldWrapper=document.getElementById('photoFieldWrapper');
+    const photoUploadModal=document.getElementById('photoUploadModal');
+    const manualPhotoInput=document.getElementById('manualPhotoInput');
+    const manualPhotoPreview=document.getElementById('manualPhotoPreview');
+    const manualPhotoPreviewImg=document.getElementById('manualPhotoPreviewImg');
+    const btnUploadManualPhoto=document.getElementById('btnUploadManualPhoto');
+    const btnCancelManualPhoto=document.getElementById('btnCancelManualPhoto');
+    const btnClosePhotoUpload=document.getElementById('btnClosePhotoUpload');
     const modalTitle=document.getElementById('modalTitle');
 
     // 画像アップロード（CONFIG から毎回読み込み）
@@ -2560,7 +2652,7 @@
       try{ inpCatchTime.value = toLocalInputValue(new Date(catchForm.timestamp)); }catch{ inpCatchTime.value=''; }
       inpSpecies.value=''; inpSize.value=''; inpWeight.value=''; inpMethod.value=''; inpPhoto.value='';
       imgPreview.src=''; imgPreview.classList.add('hidden');
-      catchModal.classList.remove('hidden');
+      openManualPhotoUploadModal();
     }
 
     // ★追加: Cloudinary経由でEXIF(GPS)をフロント側で取得する関数
@@ -4745,6 +4837,7 @@
 
     // ===== アクション =====
     async function startTrip(){
+      clearUploadReviewBackup();
       // ★修正：CONFIG初期化完了を待機（API呼び出し前の必須処理）
       await configInitPromise;
       showUploadingOverlay('釣行を開始しています...');
@@ -4853,6 +4946,9 @@
     function openAddCatch(){
       if (draft.status!=='active' && !manualCatchMode){ alert('まず釣行を開始してください。'); return; }
       editMode=false; editingId=null; modalTitle.textContent='釣果を追加';
+      manualCatchPhotoMetadata = null;
+      if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
+      if (inpCatchTime) inpCatchTime.readOnly = false;
 
       // ★変更：手動釣行中（manualStarted または manualCatchMode）なら時刻初期値は空欄
       if (draft.manualStarted || manualCatchMode) {
@@ -4880,6 +4976,10 @@
       inpSpecies.value=catchForm.species||''; inpSize.value=(catchForm.size_cm??''); inpWeight.value=(catchForm.weight_g??''); inpMethod.value=catchForm.method||'';
       inpPhoto.value=''; if (catchForm.photoPreviewUrl){ imgPreview.src=catchForm.photoPreviewUrl; imgPreview.classList.remove('hidden'); } else { imgPreview.src=''; imgPreview.classList.add('hidden'); }
 
+      manualCatchPhotoMetadata = null;
+      if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
+      if (inpCatchTime) inpCatchTime.readOnly = false;
+
       catchModal.classList.remove('hidden');
     }
     function closeCatchModal(){
@@ -4888,6 +4988,8 @@
       
       // ★追加：編集モーダルから釣果を追加した場合、編集モーダルに戻す
       if (window._returnToTripEditAfterCatch) {
+        console.log('[CloseCatchModal] returning to edit modal, suppressRecordView reset');
+        manualCatchSuppressRecordView = false;
         console.log('[CloseCatchModal] Flag is true, returning to trip edit modal');
         window._returnToTripEditAfterCatch = false;
         
@@ -4913,22 +5015,9 @@
         editCatchList.innerHTML = '';
         editCatchCount.textContent = ctsList.length;
 
-        // カラムマッピングを作成
-        let catchHeadersTemp = (catchesCache || [])[0] || [];
-        let colCatchTemp = {};
-        for (let i = 0; i < catchHeadersTemp.length; i++) {
-          colCatchTemp[String(catchHeadersTemp[i]).trim()] = i;
-        }
-        console.log('[CloseCatchModal] Column mapping:', colCatchTemp);
-
+        // ★修正：draft.catches は既に正規化されたオブジェクト形式なので直接使用
         ctsList.forEach((c, i) => {
-          const catchObjTemp = {
-            species: c[colCatchTemp.species] || '',
-            size_cm: parseFloat(c[colCatchTemp.size_cm]) || null,
-            timestamp: c[colCatchTemp.timestamp] || '',
-            tide_trend: c[colCatchTemp.tide_trend] || null,
-            tide_level_cm: parseFloat(c[colCatchTemp.tide_level_cm]) || null
-          };
+          const catchObjTemp = c;  // ★修正：オブジェクトをそのまま使用
 
           const itemTemp = document.createElement('div');
           itemTemp.className = 'bg-slate-800 rounded-lg p-3 flex items-start justify-between';
@@ -4980,6 +5069,7 @@
     
     // ★追加：キャンセルしてホームに戻る際、データをクリアする関数
     function cancelAndReturnHome(){
+      clearUploadReviewBackup();
       // 釣果フォームをクリア
       catchForm = { id:uuid(), timestamp:null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined };
       editMode = false;
@@ -4994,6 +5084,11 @@
       inpPhoto.value = '';
       imgPreview.src = '';
       imgPreview.classList.add('hidden');
+
+      manualCatchPhotoMetadata = null;
+      if (photoUploadModal) photoUploadModal.classList.add('hidden');
+      if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
+      if (inpCatchTime) inpCatchTime.readOnly = false;
       
       // ★修正: 釣行ステータスで分岐
       if (draft.status === 'active') {
@@ -5012,6 +5107,7 @@
 
     // ★追加：釣行中にキャンセルしてホームに戻る関数
     function cancelTripAndReturnHome(){
+      clearUploadReviewBackup();
       if (!confirm('釣行を中止してホームに戻りますか？\n※登録したデータはクリアされます。')) {
         return;
       }
@@ -5019,6 +5115,11 @@
       // ドラフトをリセット（初期状態に戻す）
       draft = { tripId: uuid(), status: 'idle', catches: [], tide_daily_cache: {}, start_water_temp: null, memo: null };
       manualCatchMode = false;
+
+      manualCatchPhotoMetadata = null;
+      if (photoUploadModal) photoUploadModal.classList.add('hidden');
+      if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
+      if (inpCatchTime) inpCatchTime.readOnly = false;
       
       saveDraft(draft);
       
@@ -5030,6 +5131,7 @@
     async function submitCatch(){
       // ★修正：CONFIG初期化完了を待機（API呼び出し前の必須処理）
       await configInitPromise;
+      const manualMetadata = manualCatchPhotoMetadata;
       
       try {
         const species = inpSpecies.value.trim();
@@ -5051,6 +5153,9 @@
         // 自動記録など“手動ではない”ときのみ現在時刻で補完
         whenLocal = nowIsoLocal();
       }
+      if (manualMetadata?.timestamp) {
+        whenLocal = manualMetadata.timestamp;
+      }
       catchForm.timestamp = whenLocal;
 
 
@@ -5063,7 +5168,28 @@
       // ★修正：潮汐ロジックは写真処理(EXIF)後に移動
 
       // 写真アップロード
-      if (inpPhoto.files && inpPhoto.files[0]) {
+      if (manualMetadata) {
+        catchForm.photoFileId = manualMetadata.photoFileId || '';
+        catchForm.photoDriveUrl = manualMetadata.photoDriveUrl || '';
+        catchForm.photoDriveThumbUrl = manualMetadata.photoDriveThumbUrl || '';
+        catchForm.photoPreviewUrl = manualMetadata.previewDataUrl || manualMetadata.photoDriveThumbUrl || '';
+        if (typeof manualMetadata.lat === 'number' && typeof manualMetadata.lng === 'number') {
+          catchForm.exif_lat = manualMetadata.lat;
+          catchForm.exif_lng = manualMetadata.lng;
+          if (!(typeof draft.lat === 'number' && typeof draft.lng === 'number')) {
+            draft.lat = manualMetadata.lat;
+            draft.lng = manualMetadata.lng;
+            LOG.app('[ManualPhoto] representative position set on draft', { lat: draft.lat, lng: draft.lng });
+            saveDraft(draft);
+          }
+        }
+        LOG.app('[ManualPhoto] metadata applied', {
+          timestamp: manualMetadata.timestamp,
+          lat: catchForm.exif_lat,
+          lng: catchForm.exif_lng,
+          fileId: catchForm.photoFileId
+        });
+      } else if (inpPhoto.files && inpPhoto.files[0]) {
         try {
           const file = inpPhoto.files[0];
 
@@ -5122,7 +5248,7 @@
 
       // 天気
       let wx = null;
-      const weatherTargetDate = catchForm.timestamp || whenLocal || null;
+      const weatherTargetDate = manualMetadata?.timestamp || catchForm.timestamp || whenLocal || null;
       if (typeof draft.lat === 'number' && typeof draft.lng === 'number'){
         try { wx = await fetchWeather(draft.lat, draft.lng, weatherTargetDate); } catch(e){ console.error('[3940] fetchWeather error:', e); }
       }
@@ -5235,6 +5361,9 @@
       } else {
         draft.catches.push({ ...catchForm });
       }
+      manualCatchPhotoMetadata = null;
+      if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
+      if (inpCatchTime) inpCatchTime.readOnly = false;
       saveDraft(draft);
       closeCatchModal();
 
@@ -5254,6 +5383,11 @@
 
       // ★変更：手動モード時はモーダル表示なしで補完ロジックのみを実行
       if (manualCatchMode || !!draft.manualStarted) {
+        try {
+          await _complementTripDataOnly();
+        } catch (compErr) {
+          console.warn('[submitCatch] complementTripData failed:', compErr);
+        }
         hideUploadingOverlay();
       } else if (!editMode) {
         openUploadReview();
@@ -5638,6 +5772,7 @@
         }
       };
       const clearDraftAndUI = ()=>{
+        captureUploadReviewBackup();
         // ★修正：共通関数でオーバーレイを消す
         hideUploadingOverlay();
         uploadReviewModal.classList.add('hidden');
@@ -5781,23 +5916,25 @@
 
     // 終了前レビュー
     function openUploadReview(){
-      const cts = draft.catches||[];
+      const reviewDraft = uploadReviewDraftBackup || draft;
+      const reviewPendingEnd = uploadReviewPendingEndBackup || pendingEnd;
+      const cts = reviewDraft.catches||[];
       const sum = document.createElement('div');
       sum.className = 'space-y-3';
 
         // ★確認用ログ
       LOG.app("[UploadReview] snapshot", {
-        hasStartWeather: !!draft.start_weather,
-        hasStartTide: !!draft.start_tide,
-        startedAt: draft.startedAt || null,
-        lat: draft.lat, lng: draft.lng
+        hasStartWeather: !!reviewDraft.start_weather,
+        hasStartTide: !!reviewDraft.start_tide,
+        startedAt: reviewDraft.startedAt || null,
+        lat: reviewDraft.lat, lng: reviewDraft.lng
       });
 
-      const endAtDisplay = pendingEnd?.endedAt ? new Date(pendingEnd.endedAt).toLocaleString() : (draft.endedAt ? new Date(draft.endedAt).toLocaleString() : '—');
+      const endAtDisplay = reviewPendingEnd?.endedAt ? new Date(reviewPendingEnd.endedAt).toLocaleString() : (reviewDraft.endedAt ? new Date(reviewDraft.endedAt).toLocaleString() : '—');
       const head = document.createElement('div');
       head.innerHTML =
-        `<div class="text-slate-300">Trip ID: <span class="text-slate-100">${draft.tripId.slice(0,8)}</span></div>
-        <div class="text-slate-300">開始: <span class="text-slate-100">${draft.startedAt?new Date(draft.startedAt).toLocaleString():'—'}</span></div>
+        `<div class="text-slate-300">Trip ID: <span class="text-slate-100">${reviewDraft.tripId.slice(0,8)}</span></div>
+        <div class="text-slate-300">開始: <span class="text-slate-100">${reviewDraft.startedAt?new Date(reviewDraft.startedAt).toLocaleString():'—'}</span></div>
         <div class="text-slate-300">終了: <span class="text-slate-100">${endAtDisplay}</span></div>
         <div class="text-slate-300">件数: <span class="text-slate-100">${cts.length}</span></div>`;
       sum.appendChild(head);
@@ -5810,11 +5947,11 @@
                       <div class="text-sm text-slate-200 mt-0.5">${val||'—'}</div>`;
         return d;
       };
-      const sw = draft.start_weather ? formatWeatherBrief(draft.start_weather) : null;
-      const ew = pendingEnd?.end_weather || draft.end_weather ? formatWeatherBrief(pendingEnd?.end_weather || draft.end_weather) : null;
-      const st = draft.start_tide ? `${draft.start_tide.tideName} / ${draft.start_tide.trendText}` : null;
-      const wt = draft.start_water_temp && draft.start_water_temp.temperature_c!=null
-        ? `${draft.start_water_temp.temperature_c}℃${draft.start_water_temp.point_name?`（${draft.start_water_temp.point_name}）`:''}`
+      const sw = reviewDraft.start_weather ? formatWeatherBrief(reviewDraft.start_weather) : null;
+      const ew = reviewPendingEnd?.end_weather || reviewDraft.end_weather ? formatWeatherBrief(reviewPendingEnd?.end_weather || reviewDraft.end_weather) : null;
+      const st = reviewDraft.start_tide ? `${reviewDraft.start_tide.tideName} / ${reviewDraft.start_tide.trendText}` : null;
+      const wt = reviewDraft.start_water_temp && reviewDraft.start_water_temp.temperature_c!=null
+        ? `${reviewDraft.start_water_temp.temperature_c}℃${reviewDraft.start_water_temp.point_name?`（${reviewDraft.start_water_temp.point_name}）`:''}`
         : null;
 
       wx.appendChild(boxWx('開始時の天気', sw));
@@ -5823,7 +5960,7 @@
       wx.appendChild(boxWx('当日の水温', wt));
       sum.appendChild(wx);
 
-      if (draft.start_tide?.chart){
+      if (reviewDraft.start_tide?.chart){
         const tideWrap = document.createElement('div');
         tideWrap.className = 'rounded-2xl border border-slate-800 bg-slate-900 p-3';
         const harborName = draft.start_tide?.harbor?.hn || '';
@@ -5853,7 +5990,7 @@
         
         sum.appendChild(tideWrap);
         // ★修正：catches を第3パラメータとして渡す
-        setTimeout(()=> drawTideChartOnCanvas(canvas, draft.start_tide.chart, cts), 0);
+        setTimeout(()=> drawTideChartOnCanvas(canvas, reviewDraft.start_tide.chart, cts), 0);
       }
 
       const list = document.createElement('div');
@@ -6566,38 +6703,145 @@
 
     // ★追記: 手動釣果フォーム（最小項目）
     function openManualCatchForm(){
-      // 釣行ステータスに関係なく、既存の釣果追加モーダルをそのまま使う
-      showView('record');                       // 記録ビューへ
-      editMode = false; 
-      editingId = null; 
+      return openManualCatch();
+    }
+
+    function resetManualPhotoPreview(){
+      if (manualPhotoInput) manualPhotoInput.value = '';
+      if (manualPhotoPreview) manualPhotoPreview.classList.add('hidden');
+      if (manualPhotoPreviewImg) manualPhotoPreviewImg.src = '';
+    }
+
+    function openManualPhotoUploadModal(){
+      manualCatchMode = true;
+      manualCatchPhotoMetadata = null;
+      resetManualPhotoPreview();
+      console.log('[ManualPhoto] open modal, suppressRecordView=', manualCatchSuppressRecordView);
+      if (!manualCatchSuppressRecordView) showView('record');
+      if (photoUploadModal) photoUploadModal.classList.remove('hidden');
+    }
+
+    function cancelManualPhotoFlow(){
+      manualCatchMode = false;
+      manualCatchPhotoMetadata = null;
+      manualCatchSuppressRecordView = false;
+      console.log('[ManualPhoto] cancel flow, suppressRecordView reset');
+      resetManualPhotoPreview();
+      if (photoUploadModal) photoUploadModal.classList.add('hidden');
+      if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
+      if (inpCatchTime) inpCatchTime.readOnly = false;
+    }
+
+    function closeManualPhotoUploadModal(){
+      if (photoUploadModal) photoUploadModal.classList.add('hidden');
+    }
+
+    async function handleManualPhotoInputChange(event){
+      const file = event?.target?.files?.[0];
+      if (!file || !manualPhotoPreview || !manualPhotoPreviewImg) {
+        if (manualPhotoPreview) manualPhotoPreview.classList.add('hidden');
+        return;
+      }
+      try {
+        const dataUrl = await fileToDataURL(file);
+        manualPhotoPreviewImg.src = dataUrl;
+        manualPhotoPreview.classList.remove('hidden');
+      } catch (err) {
+        console.warn('[ManualPhoto] preview failed', err);
+      }
+    }
+
+    async function handleManualPhotoUpload(){
+      const file = manualPhotoInput?.files?.[0];
+      if (!file) {
+        alert('写真を選択してください。');
+        return;
+      }
+      showUploadingOverlay('写真を解析・アップロード中...');
+      try {
+        const [exifDate, exifGps] = await Promise.all([
+          extractExifDate(file).catch(() => null),
+          extractExifGps(file).catch(() => null)
+        ]);
+        const jstIso = exifDateToJstIso(exifDate);
+        const upload = await uploadPhotoToDrive(file);
+        const previewUrl = manualPhotoPreviewImg?.src || await fileToDataURL(file);
+        manualCatchPhotoMetadata = {
+          timestamp: jstIso || null,
+          exifDate,
+          lat: (exifGps && typeof exifGps.lat === 'number') ? exifGps.lat : null,
+          lng: (exifGps && typeof exifGps.lng === 'number') ? exifGps.lng : null,
+          photoFileId: upload.fileId || '',
+          photoDriveUrl: upload.viewUrl || '',
+          photoDriveThumbUrl: upload.thumbUrl || '',
+          previewDataUrl: previewUrl || '',
+          fileName: file.name || '',
+          fileType: file.type || '',
+          fileSize: file.size || 0
+        };
+        closeManualPhotoUploadModal();
+        openManualCatchConfirmationModal();
+      } catch (err) {
+        console.error('[ManualPhoto] upload failed', err?.message || err);
+        alert('写真の解析またはアップロードに失敗しました。');
+      } finally {
+        hideUploadingOverlay();
+      }
+    }
+
+    function openManualCatchConfirmationModal(){
+      console.log('[ManualCatchConfirmation] suppressRecordView=', manualCatchSuppressRecordView);
+      if (!manualCatchSuppressRecordView) showView('record');
+      editMode = false;
+      editingId = null;
       modalTitle.textContent = '手動で釣果を追加';
       manualCatchMode = true;
-
-      // ★追加：手動モードフラグを明示的にオン
-      manualCatchMode = true;
-
-      // 既存 openAddCatch と同等の初期化（status チェックはしない）
-      catchForm = { 
+      catchForm = {
         id: uuid(),
-        timestamp: null,                        // ← 時刻は入れない（null）
-        species:'', 
-        size_cm:null, 
-        weight_g:null, 
-        method:'', 
-        photoPreviewUrl: undefined 
+        timestamp: null,
+        species: '',
+        size_cm: null,
+        weight_g: null,
+        method: '',
+        photoPreviewUrl: undefined
       };
 
-      // ← 入力欄は空のまま
-      inpCatchTime.value = '';
-      inpSpecies.value   = '';
-      inpSize.value      = '';
-      inpWeight.value    = '';
-      inpMethod.value    = '';
-      inpPhoto.value     = '';
-      imgPreview.src     = '';
-      imgPreview.classList.add('hidden');
+      const metadata = manualCatchPhotoMetadata;
+      if (inpCatchTime) {
+        if (metadata?.timestamp) {
+          const parsed = new Date(metadata.timestamp);
+          if (!isNaN(parsed.getTime())) {
+            inpCatchTime.value = toLocalInputValue(parsed);
+            inpCatchTime.readOnly = true;
+          } else {
+            inpCatchTime.value = '';
+            inpCatchTime.readOnly = false;
+          }
+        } else {
+          inpCatchTime.value = '';
+          inpCatchTime.readOnly = false;
+        }
+      }
 
-      // モーダルを開く
+      inpSpecies.value = '';
+      inpSize.value = '';
+      inpWeight.value = '';
+      inpMethod.value = '';
+      inpPhoto.value = '';
+
+      if (photoFieldWrapper) {
+        photoFieldWrapper.classList.toggle('hidden', !!metadata);
+      }
+
+      const previewSrc = metadata?.previewDataUrl || metadata?.photoDriveThumbUrl || '';
+      if (previewSrc) {
+        imgPreview.src = previewSrc;
+        imgPreview.classList.remove('hidden');
+      } else {
+        imgPreview.src = '';
+        imgPreview.classList.add('hidden');
+      }
+
       catchModal.classList.remove('hidden');
     }
 
@@ -6779,6 +7023,16 @@
     };
     catchModal.addEventListener('click', (e)=>{ if (e.target === catchModal) cancelAndReturnHome(); });
 
+    if (manualPhotoInput) manualPhotoInput.addEventListener('change', handleManualPhotoInputChange);
+    if (btnUploadManualPhoto) btnUploadManualPhoto.onclick = handleManualPhotoUpload;
+    if (btnCancelManualPhoto) btnCancelManualPhoto.onclick = cancelManualPhotoFlow;
+    if (btnClosePhotoUpload) btnClosePhotoUpload.onclick = cancelManualPhotoFlow;
+    if (photoUploadModal) {
+      photoUploadModal.addEventListener('click', (e)=>{
+        if (e.target === photoUploadModal) cancelManualPhotoFlow();
+      });
+    }
+
     // 下部バー
     btnAddCatchBottom.onclick=openAddCatch;
     btnEndBottom.onclick = openTripReview;
@@ -6850,22 +7104,12 @@
       editCatchCount.textContent = cts.length;
 
       // ★修正：カラムマッピングをループの外で作成
-      const catchHeaders = (catchesCache || [])[0] || [];
-      const colCatch = {};
-      for (let i = 0; i < catchHeaders.length; i++) {
-        colCatch[String(catchHeaders[i]).trim()] = i;
-      }
+      const colCatch = buildEditCatchColumnMap();
+      editCatchColumnMap = colCatch;
       console.log('[renderEditCatchList] colCatch mapping:', colCatch);
 
       cts.forEach((c, idx) => {
-        // 配列行データをオブジェクトに変換
-        const catchObj = {
-          species: c[colCatch.species] || '',
-          size_cm: parseFloat(c[colCatch.size_cm]) || null,
-          weight_g: parseFloat(c[colCatch.weight_g]) || null,
-          method: c[colCatch.method] || '',
-          timestamp: c[colCatch.timestamp] || ''
-        };
+        const catchObj = normalizeEditCatchEntry(c, colCatch);
         
         console.log(`[renderEditCatchList] catch[${idx}]:`, { raw: c, converted: catchObj });
 
@@ -6909,7 +7153,7 @@
     function editCatchForm(catchIndex) {
       // 既存の釣果フォームを使用
       if (catchIndex >= 0 && catchIndex < draft.catches.length) {
-        catchForm = { ...draft.catches[catchIndex] };
+        catchForm = normalizeEditCatchEntry(draft.catches[catchIndex]);
         LOG.app('[EditCatch] editing catch', { index: catchIndex });
       } else {
         catchForm = { timestamp: null, species: '', size_cm: null, weight_g: null, method: '', photoPreviewUrl: undefined };
@@ -6945,20 +7189,6 @@
       window._returnToTripEditAfterCatch = true;
     }
 
-    // 釣果保存後に釣行編集モーダルに戻るための修正
-    const originalSubmitCatch = submitCatch;
-    submitCatch = function() {
-      originalSubmitCatch.call(this);
-      if (window._returnToTripEditAfterCatch) {
-        window._returnToTripEditAfterCatch = false;
-        setTimeout(() => {
-          catchModal.classList.add('hidden');
-          tripEditModal.classList.remove('hidden');
-          renderEditCatchList();
-        }, 100);
-      }
-    };
-
     // ★追加：釣行編集モーダルのボタンイベント
     console.log('[ModalSetup] Setting up trip edit modal buttons', { 
       btnCloseTripEdit: !!btnCloseTripEdit, 
@@ -6973,18 +7203,55 @@
       };
     }
     if (btnCancelTripEdit) {
-      btnCancelTripEdit.onclick = () => {
+      btnCancelTripEdit.onclick = async () => {
         // ★追加：アップロード中はキャンセルできない
         if (isUploading) return;
         
         console.log('[ModalButton] Cancel button clicked');
+        
+        // ★追加：編集フォームをリセット
+        const formSection = document.getElementById('editCatchFormSection');
+        if (formSection) {
+          formSection.classList.add('hidden');
+          formSection.dataset.isEditing = 'false';
+          formSection.dataset.editingIndex = '-1';
+          document.getElementById('editFormCatchTime').value = '';
+          document.getElementById('editFormCatchSpecies').value = '';
+          document.getElementById('editFormCatchSize').value = '';
+          document.getElementById('editFormCatchWeight').value = '';
+          document.getElementById('editFormCatchMethod').value = '';
+          document.getElementById('editFormCatchPhoto').value = '';
+          const photoPreview = document.getElementById('editFormCatchPhotoPreview');
+          if (photoPreview) {
+            photoPreview.classList.add('hidden');
+            photoPreview.src = '';
+          }
+        }
+        
         tripEditModal.style.display = 'none';
         tripEditModal.classList.add('hidden');
+        
+        // ★追加：編集モーダルをキャンセル時にdraftをクリア（saveDraftをawaitして完了を待つ）
+        draft = { tripId: uuid(), status: 'idle', catches: [], tide_daily_cache: {}, start_water_temp: null, memo: null };
+        await saveDraft(draft);
+        render();
       };
     }
     if (btnAddCatchInEdit) {
       btnAddCatchInEdit.onclick = () => {
         console.log('[EditModal] Add catch button clicked');
+        if (draft.manualStarted || manualCatchMode) {
+          console.log('[EditModal] manualCatchSuppressRecordView -> true');
+          manualCatchSuppressRecordView = true;
+          const tripEditModal = document.getElementById('tripEditModal');
+          if (tripEditModal) {
+            tripEditModal.style.display = 'none';
+            tripEditModal.classList.add('hidden');
+          }
+          window._returnToTripEditAfterCatch = true;
+          openManualCatch();
+          return;
+        }
         // 釣果追加フォームを表示
         const formSection = document.getElementById('editCatchFormSection');
         if (formSection) {
@@ -7924,4 +8191,3 @@
   </script>
 </body>
 </html>
-
