@@ -29,7 +29,7 @@
   <header class="sticky top-0 z-10 backdrop-blur bg-slate-950/70 border-b border-slate-800">
     <div class="max-w-4xl mx-auto px-4 py-3">
       <div class="mb-3 text-center">
-        <h1 class="text-3xl font-bold">Fishing_Log v1.2</h1>
+        <h1 class="text-3xl font-bold">Fishing_Log_dev</h1>
       </div>
       <nav class="flex gap-2 text-sm items-center justify-between">
         <div class="flex gap-2">
@@ -142,6 +142,32 @@
             <label class="block"><span class="text-xs text-slate-400">写真</span>
               <input id="editFormCatchPhoto" type="file" accept="image/*" class="mt-1 w-full text-xs" />
               <img id="editFormCatchPhotoPreview" class="hidden mt-2 w-full rounded-lg max-h-40 object-cover" />
+            </label>
+            
+            <!-- ★追加：EXIF情報表示セクション -->
+            <div id="exifInfoSection" class="hidden bg-slate-950 border border-slate-700 rounded-lg p-3">
+              <div class="text-xs font-semibold text-slate-400 mb-2">撮影情報（EXIF）</div>
+              <div class="space-y-1">
+                <div class="text-xs text-slate-300">
+                  <span class="text-slate-500">撮影日時:</span>
+                  <span id="exifDateDisplay">-</span>
+                </div>
+                <div class="text-xs text-slate-300">
+                  <span class="text-slate-500">撮影位置:</span>
+                  <span id="exifGpsDisplay">-</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- ★追加：釣場位置選択 -->
+            <label class="block"><span class="text-xs text-slate-400">釣場位置</span>
+              <div class="mt-1 space-y-2">
+                <select id="editFormLocationSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-sm">
+                  <option value="">位置を選択...</option>
+                </select>
+                <input id="editFormLocationCustom" type="text" placeholder="カスタム位置名" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-sm" />
+              </div>
+              <div id="locationCandidatesList" class="mt-2 text-xs text-slate-400"></div>
             </label>
             
             <div class="flex gap-2 mt-3">
@@ -405,10 +431,12 @@
           <input id="inpMethod" type="text" placeholder="例：メタルジグ 20g" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" />
         </label>
         <div id="photoFieldWrapper" class="block">
-          <label class="block"><span class="text-sm text-slate-300">写真</span>
-            <input id="inpPhoto" type="file" accept="image/*" class="mt-1 w-full text-sm" />
-          </label>
-          <img id="imgPreview" alt="preview" class="hidden mt-2 h-32 w-full object-cover rounded-xl border border-slate-800" />
+          <div class="block"><span class="text-sm text-slate-300">写真</span>
+            <input id="inpPhoto" type="file" accept="image/*" class="hidden" />
+            <button id="btnSelectPhoto" class="mt-1 w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm text-white font-semibold" type="button">ファイルを選択</button>
+            <div id="photoFileName" class="mt-2 text-xs text-slate-400 hidden">選択: <span id="photoFileNameText"></span></div>
+          </div>
+          <img id="imgPreview" alt="preview" class="hidden mt-2 max-h-64 w-full object-contain rounded-xl border border-slate-800" />
         </div>
       </div>
       <div class="flex gap-2 mt-4">
@@ -857,6 +885,19 @@
       await loadConfigFromStorage();
       CONFIG_INITIALIZED = true;
       await initializeSheetId();
+      
+      // ★追加：バックグラウンドで地点リストを先読み（非ブロッキング）
+      console.log(`[🚀 STARTUP] Starting background points cache load...`);
+      loadWaterTempPointsFromSheet()
+        .then(() => {
+          console.log(`[✅ STARTUP] Background points cache loaded successfully`);
+          if (DEBUG_WATER) LOG.wt('Background: points cache loaded successfully');
+        })
+        .catch(err => {
+          console.warn(`[⚠️ STARTUP] Points cache load failed (non-blocking):`, err?.message || err);
+          // 失敗時は onDemand 読み込みへフォールバック（既存動作）
+        });
+      
       window.dispatchEvent(new Event('CONFIG_READY'));
     })();
 
@@ -2329,6 +2370,9 @@
     const LS_KEY='fishtrip_draft_v1';
     const uuid = ()=> (crypto?.randomUUID ? crypto.randomUUID() : (Date.now().toString(36)+Math.random().toString(36).slice(2,10)));
     
+    // ★追加：潮流画像ホワイトリストキャッシュ（グローバル）
+    let akashiTidePointsCache = { codes: [], names: [] };
+    
     // ドラフト読み込みのフォールバック実装
     const loadDraft = () => {
       const defaultDraft = { 
@@ -2337,6 +2381,7 @@
         catches: [], 
         tide_daily_cache: {}, 
         manualStarted: false, 
+        shouldFetchTideImages: false,  // ★追加：潮流画像取得対象フラグ
         updatedAt: new Date().toISOString() 
       };
       
@@ -2359,6 +2404,7 @@
             tide_daily_cache: p.tide_daily_cache || {},
             start_water_temp: p.start_water_temp || null,
             manualStarted: !!p.manualStarted,
+            shouldFetchTideImages: !!p.shouldFetchTideImages,  // ★追加：フラグを復元
             updatedAt: p.updatedAt || new Date().toISOString()
           };
         }
@@ -2398,12 +2444,21 @@
     // IndexedDB 初期化と非同期ロード
     (async () => {
       try {
+        // ★追加【解決策1】：configInitPromise を待機して SHEET_ID 取得を完了させる
+        console.log('[Init] Waiting for CONFIG initialization...');
+        await configInitPromise;
+        console.log('[Init] CONFIG initialization complete, SHEET_ID:', SHEET_ID || '(not set)');
+        
         await initIndexedDB();
         const idbDraft = await loadDraftFromIndexedDB(draft.tripId);
         if (idbDraft && new Date(idbDraft.updatedAt) > new Date(draft.updatedAt || 0)) {
           console.log('[Init] Using newer IndexedDB version');
           draft = idbDraft;
         }
+        
+        // ★追加：アプリ起動時にホワイトリスト初期化
+        await initializeTideWhitelist();
+        
         if (typeof render === 'function') render();
       } catch (err) {
         console.warn('[Init] Failed to load from IndexedDB:', err);
@@ -2411,7 +2466,7 @@
       }
     })();
 
-    let catchForm = { id: uuid(), timestamp: nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined };
+    let catchForm = { id: uuid(), timestamp: nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
     let editMode=false, editingId=null;
     let manualCatchMode = false;
     let manualCatchPhotoMetadata = null;
@@ -2449,6 +2504,15 @@
     const inpPhoto=document.getElementById('inpPhoto');
     const imgPreview=document.getElementById('imgPreview');
     const photoFieldWrapper=document.getElementById('photoFieldWrapper');
+    
+    // ★追加：catchModal用のEXIF・位置情報要素参照
+    const catchExifInfoSection=document.getElementById('catchExifInfoSection');
+    const catchExifDateDisplay=document.getElementById('catchExifDateDisplay');
+    const catchExifGpsDisplay=document.getElementById('catchExifGpsDisplay');
+    const catchLocationSelect=document.getElementById('catchLocationSelect');
+    const catchLocationCustom=document.getElementById('catchLocationCustom');
+    const catchLocationCandidatesList=document.getElementById('catchLocationCandidatesList');
+    
     const photoUploadModal=document.getElementById('photoUploadModal');
     const manualPhotoInput=document.getElementById('manualPhotoInput');
     const manualPhotoPreview=document.getElementById('manualPhotoPreview');
@@ -2774,8 +2838,270 @@
       // GAS の cleanupOrphanPhotos() がシート上に存在しない fileId を定期的に削除
     }
 
+    // ============================================
+    // ★追加：Phase 1 - ホワイトリスト取得・キャッシュ関数群
+    // ============================================
+    
+    // 削除：extractAkashiTidePoints() は不要（loadHarborsFromSheet() を使用）
+    
+    /**
+     * ホワイトリスト（港コード・港名リスト）を localStorage に保存
+     * @param {Object} whitelist - {codes: [...], names: [...]}
+     */
+    function saveTideWhitelistToStorage(whitelist) {
+      try {
+        const storageKey = 'tide_akashi_whitelist_v1';
+        const storageData = {
+          timestamp: Date.now(),
+          whitelist: whitelist
+        };
+        localStorage.setItem(storageKey, JSON.stringify(storageData));
+        console.log(`[TideWhitelist:Storage:Save] ✅ Saved to localStorage`, {
+          key: storageKey,
+          timestamp: new Date(storageData.timestamp).toISOString(),
+          codes: whitelist.codes.length,
+          names: whitelist.names.length,
+          storageSizeKB: JSON.stringify(storageData).length / 1024
+        });
+      } catch (e) {
+        console.error('[TideWhitelist:Storage:Save] ❌ Save to storage failed:', e.message);
+      }
+    }
+    
+    /**
+     * localStorage からホワイトリストを復元
+     * @returns {Object|null} {codes: [...], names: [...]} または null
+     */
+    function loadTideWhitelistFromStorage() {
+      try {
+        const storageKey = 'tide_akashi_whitelist_v1';
+        const stored = localStorage.getItem(storageKey);
+        if (!stored) {
+          console.log('[TideWhitelist:Storage:Load] ℹ️ No data in localStorage - will fetch from GAS');
+          return null;
+        }
+        
+        const data = JSON.parse(stored);
+        console.log('[TideWhitelist:Storage:Load] ✅ Loaded from localStorage', {
+          key: storageKey,
+          timestamp: new Date(data.timestamp).toISOString(),
+          codes: data.whitelist.codes.length,
+          names: data.whitelist.names.length,
+          ageHours: ((Date.now() - data.timestamp) / 3600000).toFixed(1)
+        });
+        return data.whitelist;
+        
+      } catch (e) {
+        console.error('[TideWhitelist:Storage:Load] ❌ Load from storage failed:', e.message);
+        return null;
+      }
+    }
+    
+    /**
+     * アプリ起動時：ホワイトリスト初期化
+     * 
+     * ★改版【解決策 1 & 3】
+     * - 既存の loadHarborsFromSheet() の結果を利用
+     * - フロント側で既に 各港の lat/lon が取得済み
+     * - localStorage キャッシュから復元、なければ loadHarborsFromSheet() から取得
+     */
+    async function initializeTideWhitelist() {
+      console.log('[TideWhitelist:Init] ★★★ Starting initialization ★★★');
+      console.time('[TideWhitelist:Init] Total time');
+      
+      try {
+        // Step 1: localStorage を確認
+        console.log('[TideWhitelist:Init] Step 1: Checking localStorage...');
+        let whitelist = loadTideWhitelistFromStorage();
+        
+        if (whitelist && (whitelist.codes.length > 0 || whitelist.names.length > 0)) {
+          console.log('[TideWhitelist:Init] ✅ Step 1 Result: Using cached data from localStorage');
+          akashiTidePointsCache = whitelist;
+          console.timeEnd('[TideWhitelist:Init] Total time');
+          console.log('[TideWhitelist:Init] ✅✅✅ Initialization complete (from cache)', {
+            codes: akashiTidePointsCache.codes.length,
+            names: akashiTidePointsCache.names.length,
+            status: 'CACHE_HIT'
+          });
+          return;
+        }
+        
+        // Step 2: 既存の loadHarborsFromSheet() から港データを取得
+        console.log('[TideWhitelist:Init] Step 2: Loading harbor data from sheet...');
+        console.time('[TideWhitelist:Init] Load harbor data');
+        const harborData = await loadHarborsFromSheet();
+        console.timeEnd('[TideWhitelist:Init] Load harbor data');
+        
+        if (!harborData || !harborData.mapped || harborData.mapped.length === 0) {
+          console.warn('[TideWhitelist:Init] ⚠️ No harbor data available');
+          akashiTidePointsCache = { codes: [], names: [] };
+          console.timeEnd('[TideWhitelist:Init] Total time');
+          return;
+        }
+        
+        console.log('[TideWhitelist:Init] ✅ Step 2 Result: Loaded', harborData.mapped.length, 'harbors from sheet');
+        
+        // DEBUG: 最初の 3 件の港データを確認（カラムマッピング検証用）
+        console.log('[TideWhitelist:Init] [DEBUG] First 3 harbors from loadHarborsFromSheet():', 
+          harborData.mapped.slice(0, 3).map(h => ({
+            pc: h.pc,
+            hc: h.hc,
+            pn: h.pn,
+            hn: h.hn,
+            lat: h.lat,
+            lon: h.lon
+          }))
+        );
+        
+        // Step 3: 明石中心 25km 圏内の港をフィルタ
+        console.log('[TideWhitelist:Init] Step 3: Filtering for Akashi area (25km)...');
+        const akashiCenter = { lat: 34.616539, lng: 135.022438 };
+        const radiusKm =17;
+        const R = 6371; // 地球半径 km
+        
+        const filteredHarbors = harborData.mapped.filter(harbor => {
+          // Haversine 距離計算
+          const toRad = deg => (deg * Math.PI) / 180;
+          const dLat = toRad(harbor.lat - akashiCenter.lat);
+          const dLon = toRad(harbor.lon - akashiCenter.lng);
+          const a = Math.sin(dLat / 2) ** 2 +
+                    Math.cos(toRad(akashiCenter.lat)) * Math.cos(toRad(harbor.lat)) * Math.sin(dLon / 2) ** 2;
+          const distance = R * 2 * Math.asin(Math.sqrt(a));
+          return distance <= radiusKm;
+        });
+        
+        console.log('[TideWhitelist:Init] ✅ Step 3 Result: Filtered to', filteredHarbors.length, 'harbors');
+        
+        // DEBUG: フィルタ後のすべての港データを確認
+        console.log('[TideWhitelist:Init] [DEBUG] All filtered harbors:', 
+          filteredHarbors.map(h => ({
+            pc: h.pc,
+            hc: h.hc,
+            pn: h.pn,
+            hn: h.hn,
+            lat: h.lat,
+            lon: h.lon
+          }))
+        );
+        
+        // Step 4: 港コード・港名リストを抽出
+        console.log('[TideWhitelist:Init] Step 4: Extracting codes and names...');
+        whitelist = {
+          codes: filteredHarbors.map(h => h.hc),
+          names: filteredHarbors.map(h => h.hn)
+        };
+        
+        // DEBUG: 抽出されたコード・名前の完全なリストを確認
+        console.log('[TideWhitelist:Init] [DEBUG] Extracted whitelist:', {
+          codes: whitelist.codes,
+          names: whitelist.names,
+          codeCount: whitelist.codes.length,
+          nameCount: whitelist.names.length,
+          codeWithPrefecture: filteredHarbors.map(h => `${h.pc}_${h.hc}`),
+          fullData: filteredHarbors.map(h => ({
+            pc: h.pc,
+            hc: h.hc,
+            hn: h.hn,
+            pn: h.pn
+          }))
+        });
+        
+        // Step 5: localStorage に保存
+        console.log('[TideWhitelist:Init] Step 5: Saving to localStorage...');
+        saveTideWhitelistToStorage(whitelist);
+        
+        // Step 6: memory cache にセット
+        console.log('[TideWhitelist:Init] Step 6: Setting memory cache...');
+        akashiTidePointsCache = whitelist;
+        
+        console.timeEnd('[TideWhitelist:Init] Total time');
+        console.log('[TideWhitelist:Init] ✅✅✅ Initialization complete (from harbor sheet)', {
+          codes: akashiTidePointsCache.codes.length,
+          names: akashiTidePointsCache.names.length,
+          timestamp: new Date().toISOString(),
+          status: 'INITIALIZED'
+        });
+        
+      } catch (e) {
+        console.error('[TideWhitelist:Init] ❌ Initialization failed:', e.message);
+        console.error('[TideWhitelist:Init] Error stack:', e.stack);
+        console.timeEnd('[TideWhitelist:Init] Total time');
+        console.warn('[TideWhitelist:Init] → Falling back to empty whitelist');
+        akashiTidePointsCache = { codes: [], names: [] };
+      }
+    }
+    
+    // ============================================
+    // ★追加：Phase 2 - 判定関数
+    // ============================================
+    
+    /**
+     * GAS の位置判定結果から港コード/港名を取得して
+     * ホワイトリストと照合
+     * 
+     * @param {Object} gasResponse - GAS からの戻り値
+     *   形式: {hc: "港コード", hn: "港名", lat: ..., lng: ..., ...}
+     * @returns {boolean} true = 対象範囲 / false = 対象外
+     */
+    function isTideImageEligible(gasResponse) {
+      console.log('[TideImage:Eligible] ★ Checking eligibility...');
+      
+      // キャッシュが未初期化なら false
+      if (!akashiTidePointsCache || 
+          (akashiTidePointsCache.codes.length === 0 && akashiTidePointsCache.names.length === 0)) {
+        console.warn('[TideImage:Eligible] ⚠️ Whitelist cache not initialized - returning false');
+        console.log('[TideImage:Eligible] Cache status:', akashiTidePointsCache);
+        return false;
+      }
+      
+      // GAS からの港コード / 港名を取得
+      const { hc: harborCode, hn: harborName } = gasResponse || {};
+      
+      console.log('[TideImage:Eligible] Input from GAS:', {
+        harborCode: harborCode,
+        harborName: harborName,
+        gasResponse: gasResponse
+      });
+      
+      // 港コード OR 港名 がホワイトリストに含まれるかチェック
+      const codeMatch = harborCode && akashiTidePointsCache.codes.includes(harborCode);
+      const nameMatch = harborName && akashiTidePointsCache.names.includes(harborName);
+      
+      const eligible = codeMatch || nameMatch;
+      
+      console.log('[TideImage:Eligible] ✅ Result:', {
+        codeMatch: codeMatch,
+        nameMatch: nameMatch,
+        eligible: eligible,
+        whitelistCodeCount: akashiTidePointsCache.codes.length,
+        whitelistNameCount: akashiTidePointsCache.names.length,
+        decision: eligible ? '✅ TARGET' : '❌ NOT_TARGET'
+      });
+      
+      return eligible;
+    }
+
     // ★追加：潮汐チャート画像取得・アップロード関数（GASプロキシ経由）
     async function fetchAndUploadTideImages(startedAt, endedAt) {
+        // ========================================
+        // ★追加：Phase 4 - シンプル判定：フラグをチェック
+        // ========================================
+        console.log('[TideImageUpload:Flag] ★ Checking shouldFetchTideImages flag...');
+        console.log('[TideImageUpload:Flag] draft.shouldFetchTideImages:', draft.shouldFetchTideImages);
+        console.log('[TideImageUpload:Flag] draft.lat:', draft.lat, 'draft.lng:', draft.lng);
+        
+        if (!draft.shouldFetchTideImages) {
+          console.log('[TideImageUpload:Flag] ℹ️ Flag is FALSE - skipping tide image fetch');
+          console.log('[TideImageUpload:Flag] ℹ️ Reason: Location is outside Akashi 12km area or position not set');
+          return {
+            ok: true,
+            images: [],
+            skipped: true,
+            reason: 'flag disabled'
+          };
+        }
+        
+        console.log('[TideImageUpload:Flag] ✅ Flag is TRUE - proceeding with tide image fetch');
         console.log('[TideImageUpload] Starting tide image fetch', { startedAt, endedAt });
         
         if (!startedAt || !endedAt) {
@@ -3457,12 +3783,19 @@
     // ======== ★追加：水温地点マッチング & 当日水温取得（既存 Workers を使用） ========
     // 地点リスト（GViz）
     let pointsCache = null;
+    
+    // ★追加：水温取得結果キャッシュ (key: "lat,lng,date", value: {result, timestamp})
+    let waterTempCache = {};
 
     async function loadWaterTempPointsFromSheet(){
       if (pointsCache){
+        console.log(`[⚡ POINTS CACHE HIT] Using cached ${pointsCache.mapped?.length ?? 0} points`);
         if (DEBUG_WATER) LOG.wt("use cached points:", { count: pointsCache.mapped?.length ?? 0 });
         return pointsCache;
       }
+      
+      console.log(`[🔄 POINTS CACHE MISS] Loading from Sheet...`);
+      const loadStartTime = performance.now();
       
       // ★追加：SHEET_ID が取得されるまで待機
       if (!SHEET_ID) {
@@ -3502,6 +3835,8 @@
       }
 
       pointsCache = { headers, rows, mapped };
+      const totalTime = (performance.now() - loadStartTime).toFixed(1);
+      console.log(`[✅ POINTS LOADED] ${mapped.length} points in ${totalTime}ms`);
       if (DEBUG_WATER){
         LOG.wt("points mapped:", { count: mapped.length });
         LOG.wt("points sample(3):", mapped.slice(0,3));
@@ -3538,18 +3873,47 @@
     }
 
     async function fetchTodayWaterTempByNearest(lat, lon, targetDate = null){
+      // ★追加：キャッシュチェック (1時間TTL)
+      const cacheKey = `${lat.toFixed(4)},${lon.toFixed(4)},${targetDate || 'today'}`;
+      const cached = waterTempCache[cacheKey];
+      const startTime = performance.now();
+      
+      if (cached && Date.now() - cached.timestamp < 3600000) { // 1時間以内
+        const age_ms = Date.now() - cached.timestamp;
+        console.log(`[⚡ CACHE HIT] key=${cacheKey}, age=${(age_ms/1000).toFixed(1)}s, responseTime=${(performance.now() - startTime).toFixed(1)}ms`);
+        if (DEBUG_WATER) LOG.wt('cache hit', { cacheKey, age_ms });
+        return cached.result;
+      }
+      
+      console.log(`[🔄 CACHE MISS] key=${cacheKey}, fetching from API...`);
+      
       await configInitPromise;
       const provider = getConfiguredWaterTempProvider();
+      let result = null;
+      
       if (provider === 'mur') {
         try {
           const murResult = await fetchWaterTempViaGasMur(lat, lon, targetDate);
-          if (murResult) return murResult;
+          if (murResult) result = murResult;
         } catch (err) {
           console.warn('[WaterTemp] MUR via GAS failed, falling back to Worker:', err?.message || err);
           if (DEBUG_WATER) LOG.wt('fallback to Worker after MUR error', err?.message || err);
         }
       }
-      return await fetchWaterTempViaWorkerPoints(lat, lon, targetDate);
+      
+      if (!result) {
+        result = await fetchWaterTempViaWorkerPoints(lat, lon, targetDate);
+      }
+      
+      // ★追加：結果をキャッシュに保存
+      if (result) {
+        waterTempCache[cacheKey] = { result, timestamp: Date.now() };
+        const totalTime = performance.now() - startTime;
+        console.log(`[✅ CACHE SAVED] key=${cacheKey}, totalTime=${totalTime.toFixed(1)}ms, temp=${result.temperature_c}°C, candidates=${result.location_candidates?.length ?? 0}`);
+        if (DEBUG_WATER) LOG.wt('cached result', { cacheKey });
+      }
+      
+      return result;
     }
 
     function normalizeWaterTempTargetIso(targetDate) {
@@ -3592,56 +3956,92 @@
       };
 
       if (DEBUG_WATER) LOG.wt('requesting GAS water temp', { workerUrl, payload });
+      console.log(`[🌊 GAS API] Starting MUR request for lat=${lat.toFixed(4)}, lng=${lon.toFixed(4)}`);
 
-      const res = await fetch(workerUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Auth-Token': CONFIG.API.WORKERS_AUTH_TOKEN
-        },
-        body: JSON.stringify(payload)
-      });
+      // ★追加：30秒タイムアウト設定
+      const controller = new AbortController();
+      const gasStartTime = performance.now();
+      const timeoutId = setTimeout(() => {
+        console.warn(`[⏱️ TIMEOUT] GAS API exceeded 30s, aborting...`);
+        controller.abort();
+      }, 30000); // 30秒でキャンセル
 
-      const text = await res.text();
-      let json;
       try {
-        json = JSON.parse(text);
-      } catch {
-        throw new Error('GASから無効なJSONが返されました');
-      }
+        const res = await fetch(workerUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Auth-Token': CONFIG.API.WORKERS_AUTH_TOKEN
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        
+        const gasTime = (performance.now() - gasStartTime).toFixed(1);
+        console.log(`[✅ GAS Response] ${gasTime}ms, status=${res.status}`);
 
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
-      }
-
-      const tempRaw = json.bestValue ?? json.bestPoint?.value ?? null;
-      const tempNum = typeof tempRaw === 'number' ? tempRaw : parseFloat(tempRaw);
-      const snappedTime = json.bestPoint?.time || json.snappedTime || isoTime;
-      const dist = typeof json.bestDistanceKm === 'number' ? Math.round(json.bestDistanceKm * 10) / 10 : null;
-      const pointName = (() => {
-        if (json.bestPoint?.latitude != null && json.bestPoint?.longitude != null) {
-          const latStr = Number(json.bestPoint.latitude).toFixed(2);
-          const lonStr = Number(json.bestPoint.longitude).toFixed(2);
-          return `MUR格子 ${latStr},${lonStr}${dist != null ? ` / ${dist}km` : ''}`;
+        const text = await res.text();
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          throw new Error('GASから無効なJSONが返されました');
         }
-        return 'MUR SST';
-      })();
 
-      const result = {
-        temperature_c: Number.isFinite(tempNum) ? Math.round(tempNum * 10) / 10 : null,
-        point_name: pointName,
-        date: snappedTime,
-        provider: 'mur_sst',
-        best_distance_km: dist,
-        _debug: DEBUG_WATER ? {
-          attempts: json.attempts?.length ?? 0,
-          radius: json.bestRadiusDeg ?? null,
-          host: json.host || null
-        } : undefined
-      };
+        if (!res.ok || !json?.ok) {
+          throw new Error(json?.error || `HTTP ${res.status}`);
+        }
 
-      if (DEBUG_WATER) LOG.wt('GAS water temp result', result);
-      return result;
+        const tempRaw = json.bestValue ?? json.bestPoint?.value ?? null;
+        const tempNum = typeof tempRaw === 'number' ? tempRaw : parseFloat(tempRaw);
+        const snappedTime = json.bestPoint?.time || json.snappedTime || isoTime;
+        const dist = typeof json.bestDistanceKm === 'number' ? Math.round(json.bestDistanceKm * 10) / 10 : null;
+        
+        // ★修正：point_name を Worker 経由と統一（findNearestWaterTempPoint で取得）
+        let pointName = 'MUR SST';  // デフォルト値
+        const murLat = json.bestPoint?.latitude;
+        const murLon = json.bestPoint?.longitude;
+        
+        if (typeof murLat === 'number' && typeof murLon === 'number') {
+          // findNearestWaterTempPoint を呼び出し（Worker 経由と同じ）
+          const point = await findNearestWaterTempPoint(murLat, murLon, 30);
+          if (point) {
+            pointName = point.name;  // ← Sheet の地点名を使用
+            if (DEBUG_WATER) LOG.wt('[GASWaterTemp] point_name set from nearest point', { point_name: pointName, code: point.code });
+          }
+        }
+
+        const candidates = Array.isArray(json.location_candidates) ? json.location_candidates : [];
+        
+        const result = {
+          temperature_c: Number.isFinite(tempNum) ? Math.round(tempNum * 10) / 10 : null,
+          point_name: pointName,
+          date: snappedTime,
+          provider: 'mur_sst',
+          best_distance_km: dist,
+          location_candidates: candidates,
+          _debug: DEBUG_WATER ? {
+            attempts: json.attempts?.length ?? 0,
+            radius: json.bestRadiusDeg ?? null,
+            host: json.host || null,
+            location_candidates_count: candidates.length
+          } : undefined
+        };
+
+        if (DEBUG_WATER) LOG.wt('GAS water temp result', result);
+        clearTimeout(timeoutId);
+        return result;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        const totalTime = (performance.now() - gasStartTime).toFixed(1);
+        if (err.name === 'AbortError') {
+          console.error(`[❌ GAS TIMEOUT] Exceeded 30s after ${totalTime}ms, falling back to Worker`);
+          if (DEBUG_WATER) LOG.wt('[WaterTemp] GAS API timeout (30s), using fallback');
+          throw new Error('GAS API timeout');
+        }
+        console.error(`[❌ GAS ERROR] ${err.message || err} (${totalTime}ms)`);
+        throw err;
+      }
     }
 
     async function fetchWaterTempViaWorkerPoints(lat, lon, targetDate = null){
@@ -4886,6 +5286,27 @@
         }catch(e){
           console.warn("[WaterTemp] startTrip failed:", e?.message||e);
         }
+        
+        // ★追加：Phase 3 - 潮流画像取得対象かどうかをGASで判定
+        try {
+          if (typeof draft.lat === 'number' && typeof draft.lng === 'number') {
+            console.log('[StartTrip:TideFlag] ★ Checking tide image eligibility for position:', { lat: draft.lat, lng: draft.lng });
+            // 既存の findNearestHarbor() を使用して GAS から港情報を取得
+            console.log('[StartTrip:TideFlag] Calling findNearestHarbor() to get harbor info...');
+            const gasResponse = await findNearestHarbor(draft.lat, draft.lng);
+            console.log('[StartTrip:TideFlag] GAS response received:', gasResponse);
+            draft.shouldFetchTideImages = isTideImageEligible(gasResponse);
+            console.log('[StartTrip:TideFlag] ✅ Flag set: shouldFetchTideImages =', draft.shouldFetchTideImages);
+            console.log('[StartTrip:TideFlag] Decision:', draft.shouldFetchTideImages ? '✅ WILL_FETCH_TIDE_IMAGES' : '❌ SKIP_TIDE_IMAGES');
+          } else {
+            console.log('[StartTrip:TideFlag] ⚠️ Position not available (lat or lng not number) - setting flag to false');
+            draft.shouldFetchTideImages = false;
+          }
+        } catch (e) {
+          console.warn('[StartTrip:TideFlag] ❌ Tide image eligibility check failed:', e.message);
+          console.error('[StartTrip:TideFlag] Error stack:', e.stack);
+          draft.shouldFetchTideImages = false;
+        }
 
       }catch(e){
         console.warn("[startTrip] unexpected error:", e?.message || e);
@@ -4952,15 +5373,33 @@
 
       // ★変更：手動釣行中（manualStarted または manualCatchMode）なら時刻初期値は空欄
       if (draft.manualStarted || manualCatchMode) {
-        catchForm={ id:uuid(), timestamp:null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined };
+        catchForm={ id:uuid(), timestamp:null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
         try{ inpCatchTime.value=''; }catch{ inpCatchTime.value=''; }
       } else {
-        catchForm={ id:uuid(), timestamp:nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined };
+        catchForm={ id:uuid(), timestamp:nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
         try{ inpCatchTime.value = toLocalInputValue(new Date(catchForm.timestamp)); }catch{ inpCatchTime.value=''; }
       }
 
       inpSpecies.value=''; inpSize.value=''; inpWeight.value=''; inpMethod.value=''; inpPhoto.value='';
       imgPreview.src=''; imgPreview.classList.add('hidden');
+
+      // ★追加：EXIF情報セクションを非表示に（新規追加時はEXIF無し）
+      const exifSection = document.getElementById('exifInfoSection');
+      if (exifSection) exifSection.classList.add('hidden');
+      
+      // ★追加：catchModal用のEXIF情報もリセット
+      if (catchExifInfoSection) catchExifInfoSection.classList.add('hidden');
+      
+      // ★追加：ロケーション選択をリセット（編集モーダル用とcatchModal用の両方）
+      const locationSelect = document.getElementById('editFormLocationSelect');
+      const locationCustom = document.getElementById('editFormLocationCustom');
+      if (locationSelect) locationSelect.value = '';
+      if (locationCustom) locationCustom.value = '';
+      
+      if (catchLocationSelect) catchLocationSelect.value = '';
+      updateLocationSelector([], true);
+      updateLocationSelector([], false);
+      if (catchLocationCustom) catchLocationCustom.value = '';
 
       catchModal.classList.remove('hidden');
       console.log('[openAddCatch] catchModal display state:', {
@@ -4975,6 +5414,38 @@
       try{ inpCatchTime.value = toLocalInputValue(new Date(catchForm.timestamp)); }catch{ inpCatchTime.value=''; }
       inpSpecies.value=catchForm.species||''; inpSize.value=(catchForm.size_cm??''); inpWeight.value=(catchForm.weight_g??''); inpMethod.value=catchForm.method||'';
       inpPhoto.value=''; if (catchForm.photoPreviewUrl){ imgPreview.src=catchForm.photoPreviewUrl; imgPreview.classList.remove('hidden'); } else { imgPreview.src=''; imgPreview.classList.add('hidden'); }
+
+      // ★追加：draftに保存されたEXIF情報を表示
+      const exifSection = document.getElementById('exifInfoSection');
+      if (exifSection) {
+        if (c.exif_date_formatted || (c.exif_lat && c.exif_lng)) {
+          exifSection.classList.remove('hidden');
+          const dateDisplay = document.getElementById('exifDateDisplay');
+          const gpsDisplay = document.getElementById('exifGpsDisplay');
+          
+          if (dateDisplay) {
+            dateDisplay.textContent = c.exif_date_formatted || '-';
+          }
+          if (gpsDisplay) {
+            if (c.exif_lat && c.exif_lng) {
+              gpsDisplay.textContent = `${c.exif_lat.toFixed(5)}, ${c.exif_lng.toFixed(5)}`;
+            } else {
+              gpsDisplay.textContent = '-';
+            }
+          }
+        } else {
+          exifSection.classList.add('hidden');
+        }
+      }
+
+      // ★追加：既存のロケーション情報があれば表示
+      const locationSelect = document.getElementById('editFormLocationSelect');
+      const locationCustom = document.getElementById('editFormLocationCustom');
+      if (locationSelect && c.location_name && c.location_source === 'selected') {
+        locationSelect.value = c.location_name;
+      } else if (locationCustom && c.location_name) {
+        locationCustom.value = c.location_name;
+      }
 
       manualCatchPhotoMetadata = null;
       if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
@@ -5071,7 +5542,7 @@
     function cancelAndReturnHome(){
       clearUploadReviewBackup();
       // 釣果フォームをクリア
-      catchForm = { id:uuid(), timestamp:null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined };
+      catchForm = { id:uuid(), timestamp:null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl:undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
       editMode = false;
       editingId = null;
       
@@ -5126,6 +5597,225 @@
       // ホームに戻る
       showView('home');
       render();
+    }
+
+    // ★追加：写真選択時にEXIF情報を抽出して表示
+    async function handlePhotoSelect(file, isEditModal = false) {
+      if (!file) return;
+      
+      try {
+        const exifDate = await extractExifDate(file);
+        const exifGps = await extractExifGps(file);
+        
+        // ★修正：draft形式で保存（draft.catchesと同じ構造）
+        if (exifDate) {
+          catchForm.exif_date = exifDate;  // 生のオブジェクト：{year, month, day, hour, minute}
+          const formatted = new Date(exifDate.year, exifDate.month - 1, exifDate.day, exifDate.hour || 0, exifDate.minute || 0).toLocaleString('ja-JP');
+          catchForm.exif_date_formatted = formatted;
+        } else {
+          catchForm.exif_date = null;
+          catchForm.exif_date_formatted = null;
+        }
+        
+        if (exifGps && typeof exifGps.lat === 'number' && typeof exifGps.lng === 'number') {
+          catchForm.exif_lat = exifGps.lat;
+          catchForm.exif_lng = exifGps.lng;
+        } else {
+          catchForm.exif_lat = null;
+          catchForm.exif_lng = null;
+        }
+        
+        // ★修正：プレビュー画像を表示（EXIF情報表示から変更）
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const previewImg = document.getElementById('imgPreview');
+          if (previewImg) {
+            previewImg.src = e.target.result;
+            previewImg.classList.remove('hidden');
+          }
+        };
+        reader.readAsDataURL(file);
+
+        await refreshLocationCandidates(isEditModal);
+      } catch (err) {
+        console.warn('[Photo] EXIF parse failed:', err);
+      }
+    }
+
+    async function refreshLocationCandidates(isEditModal = false) {
+      if (catchForm.exif_lat === null || catchForm.exif_lng === null) {
+        catchForm.location_candidates = [];
+        updateLocationSelector([], isEditModal);
+        return;
+      }
+
+      try {
+        const targetDate = catchForm.timestamp || nowIsoLocal();
+        const waterTempResult = await fetchTodayWaterTempByNearest(catchForm.exif_lat, catchForm.exif_lng, targetDate);
+        if (waterTempResult) {
+          catchForm.water_temp = waterTempResult;
+          const candidates = Array.isArray(waterTempResult.location_candidates) ? waterTempResult.location_candidates : [];
+          catchForm.location_candidates = candidates;
+          updateLocationSelector(candidates, isEditModal);
+          return;
+        }
+      } catch (err) {
+        console.warn('[WaterTemp] candidate fetch failed:', err);
+      }
+
+      catchForm.location_candidates = [];
+      updateLocationSelector([], isEditModal);
+    }
+
+    function getLocationCandidateId(candidate) {
+      if (!candidate) return '';
+      return candidate.id || candidate.code || candidate.name || '';
+    }
+
+    function applyLocationCandidateSelection(candidate) {
+      if (!candidate) return;
+      catchForm.location_name = candidate.name || catchForm.location_name;
+      catchForm.location_source = 'selected';
+      if (candidate.temperature_c != null) {
+        const base = catchForm.water_temp || {};
+        catchForm.water_temp = {
+          ...base,
+          temperature_c: candidate.temperature_c,
+          point_name: candidate.name || base.point_name || null,
+          date: candidate.date || base.date || null
+        };
+      }
+    }
+
+    // ★追加：ロケーション選択セクターの更新
+    function updateLocationSelector(candidates, isEditModal = false) {
+      let select;
+
+      if (isEditModal) {
+        select = document.getElementById('editFormLocationSelect');
+      } else {
+        select = document.getElementById('catchLocationSelect');
+      }
+
+      if (!select) return;
+
+      catchForm.location_candidates = Array.isArray(candidates) ? candidates : [];
+
+      while (select.options.length > 1) {
+        select.remove(1);
+      }
+
+      if (candidates && candidates.length > 0) {
+        candidates.forEach(c => {
+          const candidateId = getLocationCandidateId(c);
+          const opt = document.createElement('option');
+          opt.value = candidateId;
+          opt.dataset.name = c.name || '';
+          if (typeof c.distance_km === 'number') opt.dataset.distance = c.distance_km.toFixed(1);
+          if (typeof c.temperature_c === 'number') opt.dataset.temp = c.temperature_c.toFixed(1);
+          
+          // ★修正：距離と水温をoption テキストに含める
+          const distanceText = typeof c.distance_km === 'number' ? c.distance_km.toFixed(1) + 'km' : '距離不明';
+          const tempText = typeof c.temperature_c === 'number' ? ' / ' + c.temperature_c.toFixed(1) + '°C' : '';
+          opt.textContent = `${c.name} (${distanceText}${tempText})`;
+          select.appendChild(opt);
+        });
+
+        // ★修正4：最寄りの候補（distance_km が最小）をデフォルト選択
+        let nearestCandidate = candidates[0];
+        if (candidates.length > 1) {
+          nearestCandidate = candidates.reduce((prev, curr) => {
+            const prevDist = typeof prev.distance_km === 'number' ? prev.distance_km : Infinity;
+            const currDist = typeof curr.distance_km === 'number' ? curr.distance_km : Infinity;
+            return currDist < prevDist ? curr : prev;
+          });
+        }
+        if (nearestCandidate) {
+          const nearestId = getLocationCandidateId(nearestCandidate);
+          if (nearestId) select.value = nearestId;
+          applyLocationCandidateSelection(nearestCandidate);
+        }
+      } else {
+        select.value = '';
+      }
+    }
+
+    // ★追加：ロケーション選択イベントリスナー
+    (function() {
+      const select = document.getElementById('editFormLocationSelect');
+      const customInput = document.getElementById('editFormLocationCustom');
+      
+      if (select) {
+        select.addEventListener('change', function() {
+          if (!this.value) return;
+          const candidate = catchForm.location_candidates?.find(c => getLocationCandidateId(c) === this.value);
+          if (candidate) {
+            applyLocationCandidateSelection(candidate);
+          } else {
+            catchForm.location_name = this.dataset.name || this.value;
+            catchForm.location_source = 'selected';
+          }
+          if (customInput) customInput.value = '';
+        });
+      }
+      
+      if (customInput) {
+        customInput.addEventListener('input', function() {
+          if (this.value) {
+            catchForm.location_name = this.value;
+            catchForm.location_source = 'custom';
+            if (select) select.value = '';
+          }
+        });
+      }
+    })();
+
+    // ★追加：catchModal用ロケーション選択イベントリスナー
+    (function() {
+      if (catchLocationSelect) {
+        catchLocationSelect.addEventListener('change', function() {
+          if (!this.value) return;
+          const candidate = catchForm.location_candidates?.find(c => getLocationCandidateId(c) === this.value);
+          if (candidate) {
+            applyLocationCandidateSelection(candidate);
+          } else {
+            catchForm.location_name = this.dataset.name || this.value;
+            catchForm.location_source = 'selected';
+          }
+        });
+      }
+    })();
+
+    // ★追加：編集フォーム用写真選択イベントリスナー
+    if (document.getElementById('editFormCatchPhoto')) {
+      document.getElementById('editFormCatchPhoto').addEventListener('change', async function() {
+        if (this.files && this.files[0]) {
+          await handlePhotoSelect(this.files[0], true);  // isEditModal=true
+        }
+      });
+    }
+
+    // ★追加：catchModal用写真選択イベントリスナー
+    if (inpPhoto) {
+      inpPhoto.addEventListener('change', async function() {
+        if (this.files && this.files[0]) {
+          // ファイル名を表示
+          const photoFileName = document.getElementById('photoFileName');
+          const photoFileNameText = document.getElementById('photoFileNameText');
+          if (photoFileNameText) photoFileNameText.textContent = this.files[0].name;
+          if (photoFileName) photoFileName.classList.remove('hidden');
+          
+          await handlePhotoSelect(this.files[0], false);  // isEditModal=false
+        }
+      });
+
+      // ボタンクリックでファイル選択ダイアログを開く
+      const btnSelectPhoto = document.getElementById('btnSelectPhoto');
+      if (btnSelectPhoto) {
+        btnSelectPhoto.addEventListener('click', function() {
+          inpPhoto.click();
+        });
+      }
     }
 
     async function submitCatch(){
@@ -5355,11 +6045,13 @@
         photoFileId: catchForm.photoFileId,
       });
 
+      const sanitizedCatch = { ...catchForm };
+      delete sanitizedCatch.location_candidates;
       if (editMode && editingId) {
         const i = draft.catches.findIndex(x => x.id === editingId);
-        if (i >= 0) { draft.catches[i] = { ...catchForm, id: editingId }; }
+        if (i >= 0) { draft.catches[i] = { ...sanitizedCatch, id: editingId }; }
       } else {
-        draft.catches.push({ ...catchForm });
+        draft.catches.push({ ...sanitizedCatch });
       }
       manualCatchPhotoMetadata = null;
       if (photoFieldWrapper) photoFieldWrapper.classList.remove('hidden');
@@ -5375,9 +6067,9 @@
       if (!editMode){
         // ★変更：手動釣行中は timestamp を null（時刻入力は空欄のまま）
         if (manualCatchMode || !!draft.manualStarted) {
-          catchForm = { id: uuid(), timestamp: null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl: undefined };
+            catchForm = { id: uuid(), timestamp: null, species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl: undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
         } else {
-          catchForm = { id: uuid(), timestamp: nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl: undefined };
+            catchForm = { id: uuid(), timestamp: nowIsoLocal(), species:'', size_cm:null, weight_g:null, method:'', photoPreviewUrl: undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
         }
       }
 
@@ -5898,6 +6590,16 @@
             water_temp_point: c.water_temp_point || (d.start_water_temp?.point_name ?? null),
             water_temp_time: c.water_temp_time || (d.start_water_temp?.date ?? null),
             
+            // ★追加：EXIF情報
+            exif_date: c.exif_date || null,
+            exif_date_formatted: c.exif_date_formatted || null,
+            exif_lat: c.exif_lat || null,
+            exif_lng: c.exif_lng || null,
+            
+            // ★追加：釣場位置情報
+            location_name: c.location_name || null,
+            location_source: c.location_source || null,
+            
             // 写真情報
             photoFileId: c.photoFileId || null,
             photoDriveUrl: c.photoDriveUrl || null,
@@ -5999,10 +6701,17 @@
         const row=document.createElement('div'); row.className='p-3 text-sm';
         const t   = c.timestamp? new Date(c.timestamp).toLocaleString(): '';
         const wxs = c.weather? formatWeatherBrief(c.weather): '';
+        
+        // ★修正：draftに保存されたEXIFデータのみを表示
+        const exifInfo = c.exif_date_formatted || (c.exif_lat && c.exif_lng ? `${c.exif_lat.toFixed(5)}, ${c.exif_lng.toFixed(5)}` : '');
+        const locationInfo = c.location_name ? `位置: ${c.location_name}` : '';
+        
         row.innerHTML =
           `<div class="font-semibold text-slate-100">${c.species||'(魚種未設定)'} <span class="text-slate-400 text-xs ml-2">${t}</span></div>
           <div class="text-slate-300 mt-1">${[c.size_cm!=null?`サイズ:${c.size_cm}cm`:null, c.weight_g!=null?`重量:${c.weight_g}g`:null, c.method||null].filter(Boolean).join(' / ')}</div>
-          <div class="text-slate-400 text-xs mt-1">${wxs}</div>`;
+          <div class="text-slate-400 text-xs mt-1">${wxs}</div>
+          ${exifInfo ? `<div class="text-slate-400 text-xs mt-1">撮影: ${exifInfo}</div>` : ''}
+          ${locationInfo ? `<div class="text-slate-400 text-xs mt-1">${locationInfo}</div>` : ''}`;
       list.appendChild(row);
       });
       sum.appendChild(list);
@@ -6216,16 +6925,24 @@
         draft.end_weather = endWx || null;
         
         // ★追加：潮汐チャート画像を取得・アップロード
-        console.log('[openTripReview] Fetching tide images for manual trip');
+        console.log('[openTripReview:Manual] ★ Starting tide image fetch for manual trip');
+        console.log('[openTripReview:Manual] Trip details:', {
+          startedAt: draft.startedAt,
+          endedAt: draft.endedAt,
+          flag: draft.shouldFetchTideImages,
+          catches: draft.catches.length
+        });
         try {
           const tideResult = await fetchAndUploadTideImages(draft.startedAt, draft.endedAt);
-          console.log('[openTripReview] Tide image fetch completed:', tideResult);
+          console.log('[openTripReview:Manual] ✅ Tide image fetch completed:', tideResult);
           if (tideResult.ok && tideResult.images.length > 0) {
             draft.tide_chart_images = tideResult.images;
-            console.log('[openTripReview] Stored', tideResult.images.length, 'tide chart images');
+            console.log('[openTripReview:Manual] ✅ Stored', tideResult.images.length, 'tide chart images');
+          } else if (tideResult.skipped) {
+            console.log('[openTripReview:Manual] ℹ️ Tide image fetch skipped:', tideResult.reason);
           }
         } catch (err) {
-          console.warn('[openTripReview] Tide image fetch error:', err);
+          console.warn('[openTripReview:Manual] ❌ Tide image fetch error:', err);
         }
         
         saveDraft(draft);
@@ -6331,16 +7048,24 @@
       pendingEnd = { endedAt: endedAtTime, end_weather: endWx };
 
       // ★追加：潮汐チャート画像を取得・アップロード
-      console.log('[openTripReview] Fetching tide images');
+      console.log('[openTripReview:Normal] ★ Starting tide image fetch for normal trip');
+      console.log('[openTripReview:Normal] Trip details:', {
+        startedAt: draft.startedAt,
+        endedAt: pendingEnd.endedAt,
+        flag: draft.shouldFetchTideImages,
+        catches: draft.catches.length
+      });
       try {
         const tideResult = await fetchAndUploadTideImages(draft.startedAt, pendingEnd.endedAt);
-        console.log('[openTripReview] Tide image fetch completed:', tideResult);
+        console.log('[openTripReview:Normal] ✅ Tide image fetch completed:', tideResult);
         if (tideResult.ok && tideResult.images.length > 0) {
           draft.tide_chart_images = tideResult.images;
-          console.log('[openTripReview] Stored', tideResult.images.length, 'tide chart images');
+          console.log('[openTripReview:Normal] ✅ Stored', tideResult.images.length, 'tide chart images');
+        } else if (tideResult.skipped) {
+          console.log('[openTripReview:Normal] ℹ️ Tide image fetch skipped:', tideResult.reason);
         }
       } catch (err) {
-        console.warn('[openTripReview] Tide image fetch error:', err);
+        console.warn('[openTripReview:Normal] ❌ Tide image fetch error:', err);
       }
 
       // 従来どおりアップロード確認モーダルへ
@@ -6780,7 +7505,9 @@
           fileSize: file.size || 0
         };
         closeManualPhotoUploadModal();
-        openManualCatchConfirmationModal();
+        // ★修正：openManualCatchConfirmationModal() の完了を await で待機
+        await openManualCatchConfirmationModal();
+        console.log('[ManualPhoto] Modal flow completed');
       } catch (err) {
         console.error('[ManualPhoto] upload failed', err?.message || err);
         alert('写真の解析またはアップロードに失敗しました。');
@@ -6789,7 +7516,7 @@
       }
     }
 
-    function openManualCatchConfirmationModal(){
+    async function openManualCatchConfirmationModal(){
       console.log('[ManualCatchConfirmation] suppressRecordView=', manualCatchSuppressRecordView);
       if (!manualCatchSuppressRecordView) showView('record');
       editMode = false;
@@ -6803,10 +7530,35 @@
         size_cm: null,
         weight_g: null,
         method: '',
-        photoPreviewUrl: undefined
+        photoPreviewUrl: undefined,
+        exif_date: null,
+        exif_date_formatted: null,
+        exif_lat: null,
+        exif_lng: null,
+        location_name: null,
+        location_source: null,
+        water_temp: null,
+        location_candidates: []
       };
 
       const metadata = manualCatchPhotoMetadata;
+      if (metadata) {
+        if (metadata.timestamp) {
+          catchForm.timestamp = metadata.timestamp;
+        }
+        if (metadata.exifDate) {
+          const { year, month, day, hour = 0, minute = 0 } = metadata.exifDate;
+          catchForm.exif_date = metadata.exifDate;
+          catchForm.exif_date_formatted = new Date(year, month - 1, day, hour, minute).toLocaleString('ja-JP');
+        }
+        if (typeof metadata.lat === 'number' && typeof metadata.lng === 'number') {
+          catchForm.exif_lat = metadata.lat;
+          catchForm.exif_lng = metadata.lng;
+        }
+        if (metadata.previewDataUrl || metadata.photoDriveThumbUrl) {
+          catchForm.photoPreviewUrl = metadata.previewDataUrl || metadata.photoDriveThumbUrl;
+        }
+      }
       if (inpCatchTime) {
         if (metadata?.timestamp) {
           const parsed = new Date(metadata.timestamp);
@@ -6842,7 +7594,19 @@
         imgPreview.classList.add('hidden');
       }
 
+      // ★修正：候補取得を await で同期化（完了するまで待機）
+      console.log(`[📋 MODAL INIT] Fetching candidates...`);
+      
+      try {
+        await refreshLocationCandidates(false);
+        console.log(`[✅ CANDIDATES READY] Fetch completed, showing modal`);
+      } catch (err) {
+        console.warn('[⚠️ CANDIDATES] Fetch failed:', err?.message || err);
+      }
+      
+      // モーダル表示は候補取得完了後
       catchModal.classList.remove('hidden');
+      console.log(`[📋 MODAL] Displayed with candidates`);
     }
 
     // ★変更: 手動釣行の登録（写真・現在地の取得は行わず、モーダル入力だけで確定。登録時に不足補完を実行）
@@ -7156,7 +7920,7 @@
         catchForm = normalizeEditCatchEntry(draft.catches[catchIndex]);
         LOG.app('[EditCatch] editing catch', { index: catchIndex });
       } else {
-        catchForm = { timestamp: null, species: '', size_cm: null, weight_g: null, method: '', photoPreviewUrl: undefined };
+        catchForm = { timestamp: null, species: '', size_cm: null, weight_g: null, method: '', photoPreviewUrl: undefined, exif_date:null, exif_date_formatted:null, exif_lat:null, exif_lng:null, location_name:null, location_source:null, water_temp:null, location_candidates: [] };
         LOG.app('[EditCatch] adding new catch');
       }
 
